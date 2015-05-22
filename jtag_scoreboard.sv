@@ -2,7 +2,7 @@
 // Class: jtag_scoreboard
 //---------------------------------------------------------------------------
 
-class jtag_scoreboard extends uvm_scoreboard#( jtag_transaction );
+class jtag_scoreboard extends uvm_subscriber#( jtag_transaction );
    `uvm_component_utils( jtag_scoreboard )
 
    function new( string name, uvm_component parent );

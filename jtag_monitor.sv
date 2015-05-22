@@ -14,8 +14,8 @@ class jtag_monitor extends uvm_monitor;
 
    function void build_phase( uvm_phase phase );
       super.build_phase( phase );
-      assert(uvm_config_db#( jtag_configuration)::get ( .cntxt( this ), .inst_name( "*" ), .field_name( "jtag_if" ), .value( jtag_vi) ));
-      else `uvm_fatal("NOVIF", "Failed to get virtual interfaces form uvm_config_db.\n");
+      //assert(uvm_config_db#( jtag_configuration)::get ( .cntxt( this ), .inst_name( "*" ), .field_name( "jtag_cfg" ), .value( jtag_vi) ));
+      //else `uvm_fatal("NOVIF", "Failed to get virtual interfaces form uvm_config_db.\n");
       
       jtag_ap = new( .name("jtag_ap"), .parent(this) );
    endfunction: build_phase

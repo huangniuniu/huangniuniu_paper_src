@@ -13,7 +13,7 @@ class jtag_driver extends uvm_driver#( jtag_transaction );
 
    function void build_phase( uvm_phase phase );
       super.build_phase( phase );
-      uvm_config_db#( jtag_configuration)::get ( .cntxt( this ), .inst_name( "*" ), .field_name( "jtag_if" ), .value( jtag_vi) );
+      //uvm_config_db#( jtag_configuration)::get ( .cntxt( this ), .inst_name( "*" ), .field_name( "jtag_if" ), .value( jtag_vi) );
 	 
    endfunction: build_phase
 
