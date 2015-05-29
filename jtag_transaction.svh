@@ -2,7 +2,6 @@
 // class: jtag_transaction
 //------------------------------------------------------------------------------
 class jtag_transaction extends uvm_sequence_item;
-    typedef enum bit[1:0] { 1149.1, 1500, 1687} protocol_e;
 
     rand  protocol_e                 portocol;
 
