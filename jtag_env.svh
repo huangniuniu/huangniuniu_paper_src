@@ -3,25 +3,71 @@
 //------------------------------------------------------------------------------
 class jtag_transaction extends uvm_sequence_item;
 
-    rand  protocol_e                 portocol;
+    rand  protocol_e                 protocol;
 
     rand  bit [`IR_WIDTH-1:0]        o_ir;
 
-    rand  unsigned int               o_dr_length;
-    rand  bit                        o_dr[];
+    rand  int unsigned               o_dr_length;
+    bit                              o_dr[];
     //rand  bit [o_dr_length-1:0]      o_dr;
     
     //i_dr_queue/i_ir_queue  store tdo data
     bit                              i_dr_queue[$];
-    bit                              i_ir_quene[$];
+    bit                              i_ir_queue[$];
 
     //o_dr_queue/o_ir_queue  store tdi data
     bit                              o_dr_queue[$];
-    bit                              o_ir_quene[$];
+    bit                              o_ir_queue[$];
+   
+    `uvm_object_utils( jtag_transaction )
     
-    function new (string name = "jtag_transaction");
-        super.new(name); 
+    function new(string name = "jtag_transaction");
+        super.new(name);
+        o_dr = new[ o_dr_length ];
+
     endfunction
+    
+    constraint o_dr_length_c { 
+       o_dr_length >= 8;
+       o_dr_length <= 64;
+    }
+    
+    function void post_randomize;
+        o_dr = new[ o_dr_length ];
+        
+        foreach( o_dr[i] )
+            o_dr[i] = $urandom;
+    endfunction: post_randomize
+    
+    function string convert2string();
+        string       s;
+        int unsigned hex_value;
+        int unsigned four_bits_num = o_dr_length / 4;
+        int unsigned remainder = o_dr_length % 4;
+
+        s = super.convert2string();
+        
+        $sformat(s, "%s\n ////////////////////////////////////////////////////////////\n jtag_transaction\n protocol \t%0s\n o_ir \t%8b\n o_dr_length \t%0d\n o_dr \t",s, protocol.name(), o_ir, o_dr_length);
+         
+        if (remainder != 0) begin
+            if (remainder == 1)
+                hex_value = o_dr[four_bits_num*4];
+            else if (remainder == 2)
+                hex_value = o_dr[four_bits_num*4 + 1] *2 + o_dr[four_bits_num*4];
+            else if (remainder == 3)
+                hex_value = o_dr[four_bits_num*4 + 2] *4 + o_dr[four_bits_num*4 + 1] *2 + o_dr[four_bits_num*4];
+            $sformat(s, "%s%0h",s,hex_value);
+        end 
+        
+        for ( int i = 0; i < four_bits_num; i++) begin
+            hex_value = o_dr[i*4+3] *8 + o_dr[i*4+2] *4 + o_dr[i*4+1] *2 + o_dr[i*4];
+            $sformat(s, "%s%0h",s,hex_value);
+        end
+        
+        $sformat(s, "%s\n ////////////////////////////////////////////////////////////\n",s);
+        return s;
+    endfunction: convert2string
+
 
 endclass:jtag_transaction
 
@@ -75,8 +121,8 @@ class jtag_monitor extends uvm_monitor;
 
          forever @(posedge jtag_vi.monitor_mp.tck) begin
             if( c_state == `CAPTURE_IR)begin
-               //creat a jtag transaction for boradcasting.
-               jtag_tx = jtag_transaction::type_id::creat( .name("jtag_tx") );
+               //create a jtag transaction for boradcasting.
+               jtag_tx = jtag_transaction::type_id::create( .name("jtag_tx") );
             end
             
             if( c_state == `UPDATE_DR)begin
@@ -106,8 +152,10 @@ class jtag_monitor extends uvm_monitor;
                   if(jtag_vi.monitor_mp.tms == 1'b1) c_state = `EXIT1_DR;
 
                   //collects tdi/tdo data 
-                  jtag_tx.o_dr_queue.push_back( jtag_vi.monitor_mp.tdi);
-                  jtag_tx.i_dr_queue.push_back( jtag_vi.monitor_mp.tdo);
+                  //jtag_tx.o_dr_queue.push_back( jtag_vi.monitor_mp.tdi );
+                  jtag_tx.o_dr_queue = { jtag_tx.o_dr_queue,jtag_vi.monitor_mp.tdi };
+                  //jtag_tx.i_dr_queue.push_back( jtag_vi.monitor_mp.tdo );
+                  jtag_tx.i_dr_queue = { jtag_tx.i_dr_queue,jtag_vi.monitor_mp.tdo };
                end
 
                `EXIT1_DR: begin
@@ -143,8 +191,8 @@ class jtag_monitor extends uvm_monitor;
                   if(jtag_vi.monitor_mp.tms == 1'b1) c_state = `EXIT1_IR;
 
                   //collects tdi/tdo data 
-                  jtag_tx.o_ir_queue.push_back( jtag_vi.monitor_mp.tdi);
-                  jtag_tx.i_ir_queue.push_back( jtag_vi.monitor_mp.tdo);
+                  jtag_tx.o_ir_queue = { jtag_tx.o_ir_queue,jtag_vi.monitor_mp.tdi };
+                  jtag_tx.i_ir_queue = { jtag_tx.i_ir_queue,jtag_vi.monitor_mp.tdo };
                end
 
                `EXIT1_IR: begin
@@ -194,9 +242,11 @@ class jtag_driver extends uvm_driver#( jtag_transaction );
 
    task run_phase( uvm_phase phase );
       jtag_transaction jtag_tx;
-	  
-      seq_item_port.get_next_item( jtag_tx );
+	 
+      @(negedge jtag_vi.master_mp.trst);
       forever begin
+         seq_item_port.get_next_item( jtag_tx );
+         `uvm_info( "jtag_tx", { "\n",jtag_tx.convert2string() }, UVM_LOW );
          ////take jtag fsm into test_logic_reset state
          //for(int i = 0; i < 5; i ++) begin
          //   @(posedge jtag_vi.master_mp.tck);
@@ -206,26 +256,31 @@ class jtag_driver extends uvm_driver#( jtag_transaction );
          //take jtag fsm into run_test_idle state
          @(posedge jtag_vi.master_mp.tck);
          jtag_vi.master_mp.tms <= 0;
+         `uvm_info( "jtag_driver", { "take jtag fsm into run_test_idle state.\n" }, UVM_LOW );
 
          //take jtag fsm into select_dr_scan state
          @(posedge jtag_vi.master_mp.tck);
          jtag_vi.master_mp.tms <= 1;
+         `uvm_info( "jtag_driver", { "take jtag fsm into select_dr_scan state.\n" }, UVM_LOW );
 
          //take jtag fsm into select_ir_scan state
          @(posedge jtag_vi.master_mp.tck);
          jtag_vi.master_mp.tms <= 1;
+         `uvm_info( "jtag_driver", { "take jtag fsm into select_ir_scan state.\n" }, UVM_LOW );
 
          //take jtag fsm into capture_ir state
          @(posedge jtag_vi.master_mp.tck);
          jtag_vi.master_mp.tms <= 0;
+         `uvm_info( "jtag_driver", { "take jtag fsm into capture_ir state.\n" }, UVM_LOW );
 
          //take jtag fsm into shift_ir state
-         for(int i = 0; i < IR_WIDTH; i ++) begin
+         for(int i = 0; i < `IR_WIDTH; i ++) begin
             @(posedge jtag_vi.master_mp.tck);
+            `uvm_info( "jtag_driver", { "take jtag fsm into shift_ir state.\n" }, UVM_LOW );
             jtag_vi.master_mp.tms <= 0;
             
             //collect shift out ir
-            jtag_tx.i_ir_quene.push_back(jtag_vi.master_mp.tdo);
+            jtag_tx.i_ir_queue = { jtag_tx.i_ir_queue, jtag_vi.master_mp.tdo };
             
             //shift ir in
             @(negedge jtag_vi.master_mp.tck);
@@ -235,6 +290,7 @@ class jtag_driver extends uvm_driver#( jtag_transaction );
          //take jtag fsm into exit_ir state
          @(posedge jtag_vi.master_mp.tck);
          jtag_vi.master_mp.tms <= 1;
+         `uvm_info( "jtag_driver", { "take jtag fsm into exit_ir state.\n" }, UVM_LOW );
         
          //take jtag fsm into update_ir state
          @(posedge jtag_vi.master_mp.tck);
@@ -249,12 +305,12 @@ class jtag_driver extends uvm_driver#( jtag_transaction );
          jtag_vi.master_mp.tms <= 0;
 
          //take jtag fsm into shift_dr state
-         for(int i = 0; i < o_dr_length; i ++) begin
+         for(int i = 0; i < jtag_tx.o_dr_length; i ++) begin
             @(posedge jtag_vi.master_mp.tck);
             jtag_vi.master_mp.tms <= 0;
             
             //collect shift out dr
-            jtag_tx.i_dr_quene.push_back(jtag_vi.master_mp.tdo);
+            jtag_tx.i_dr_queue = { jtag_tx.i_dr_queue, jtag_vi.master_mp.tdo };
             
             //shift dr in
             @(negedge jtag_vi.master_mp.tck);
@@ -287,7 +343,7 @@ typedef uvm_sequencer #(jtag_transaction) jtag_sequencer;
 // Class: jtag_agent
 //---------------------------------------------------------------------------
 
-class jtag_agent extends uvm_agent#( jtag_transaction );
+class jtag_agent extends uvm_agent;
    `uvm_component_utils( jtag_agent )
    
    function new( string name, uvm_component parent );
@@ -296,7 +352,7 @@ class jtag_agent extends uvm_agent#( jtag_transaction );
 
    //handles for agent's components
    jtag_sequencer    sqr;
-   jtag_dirver       drv;
+   jtag_driver       drv;
    jtag_monitor      mon;
 
    //jtag_config       m_config;
@@ -305,14 +361,14 @@ class jtag_agent extends uvm_agent#( jtag_transaction );
    //localparam OFF = 1'b0, ON = 1'b1;
    
    //handles for monitor's analysis port
-   uvm_analysis_port jtag_ap;
+   uvm_analysis_port#( jtag_transaction ) jtag_ap;
 
    function void build_phase( uvm_phase phase );
       super.build_phase( phase );
 	   
-      sqr = jtag_sequencer::type_id::creat(.name(sqr), .parent(this));
-      drv = jtag_sequencer::type_id::creat(.name(drv), .parent(this));
-      mon = jtag_sequencer::type_id::creat(.name(mon), .parent(this));
+      sqr = jtag_sequencer::type_id::create(.name( "sqr" ), .parent(this));
+      drv = jtag_driver::type_id::create   (.name( "drv" ), .parent(this));
+      mon = jtag_monitor::type_id::create  (.name( "mon" ), .parent(this));
       
       jtag_ap = new( .name("jtag_ap"), .parent(this) );
    endfunction: build_phase
@@ -346,7 +402,7 @@ endclass:jtag_scoreboard
 // Class: jtag_env
 //---------------------------------------------------------------------------
 
-class jtag_env extends uvm_env#( jtag_transaction );
+class jtag_env extends uvm_env;
    `uvm_component_utils( jtag_env )
    
    function new( string name, uvm_component parent );
@@ -360,10 +416,10 @@ class jtag_env extends uvm_env#( jtag_transaction );
    function void build_phase( uvm_phase phase );
       super.build_phase( phase );
 	   
-      agent = jtag_sequencer::type_id::creat(.name(agent), .parent(this));
-      scoreboard = jtag_sequencer::type_id::creat(.name(scoreboard), .parent(this));
+      agent = jtag_agent::type_id::create          (.name( "agent"      ), .parent(this));
+      scoreboard = jtag_scoreboard::type_id::create(.name( "scoreboard" ), .parent(this));
       
-      assert(uvm_config_db#( jtag_configuration)::get ( .cntxt( this ), .inst_name( "*" ), .field_name( "jtag_cfg" ), .value( jtag_cfg) ));
+      assert(uvm_config_db#( jtag_configuration)::get ( .cntxt( this ), .inst_name( "*" ), .field_name( "jtag_cfg" ), .value( cfg) ))
       else `uvm_fatal("NOVIF", "Failed to get virtual interfaces form uvm_config_db.\n");
    endfunction: build_phase
 

@@ -1,3 +1,5 @@
+// Code your testbench here
+// or browse Examples
 //---------------------------------------------------------------------------
 // module: top
 //---------------------------------------------------------------------------
@@ -22,9 +24,14 @@ module top;
       #50ns;
       trst = 0;
    end
+  
+   initial begin // waveform
+    $dumpfile( "dump.vcd" );
+    $dumpvars( 0, top );
+   end
    
    initial begin
-      uvm_config_db#( virtual jtag_if)::set( .cntxt( null ), .inst_name( "uvm_test_top" ), .field_name( "jtag_if" ), .value( jtag_if ) );
+     uvm_config_db#( virtual jtag_if)::set( .cntxt( null ), .inst_name( "uvm_test_top*" ), .field_name( "jtag_if" ), .value( jtag_if ) );
       run_test();
    end
 endmodule:top

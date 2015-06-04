@@ -16,6 +16,7 @@ class one_operation_jtag_sequence extends uvm_sequence#( jtag_transaction);
       start_item( jtag_tx );
       assert( jtag_tx.randomize() );
       finish_item( jtag_tx );
+      `uvm_info( "jtag_tx", { "\n",jtag_tx.convert2string() }, UVM_LOW );
    endtask: body
 endclass: one_operation_jtag_sequence
 
