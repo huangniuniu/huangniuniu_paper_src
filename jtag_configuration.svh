@@ -9,7 +9,9 @@ class jtag_configuration extends uvm_object;
       super.new( name );
    endfunction: new
 
-   virtual jtag_if jtag_vi;
+   virtual jtag_if          jtag_vi;
+
+   ieee1149_1_reg_block     jtag_reg_block;
 endclass: jtag_configuration
 
 

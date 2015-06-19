@@ -8,6 +8,7 @@ import uvm_pkg::*;
 typedef enum bit[1:0] { IEEE_1149_1, IEEE_1500, IEEE_1687} protocol_e;
 `define   IR_WIDTH     8
 `define   MAX_DR_WIDTH 32
+`include "ral.svh"
 `include "jtag_configuration.svh"
 //`include "jtag_transaction.svh"
 //`include "jtag_driver.svh"

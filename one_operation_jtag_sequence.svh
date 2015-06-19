@@ -20,3 +20,28 @@ class one_operation_jtag_sequence extends uvm_sequence#( jtag_transaction);
    endtask: body
 endclass: one_operation_jtag_sequence
 
+//---------------------------------------------------------------------------
+// Class: jtag_wr_sequence
+//---------------------------------------------------------------------------
+   
+class jtag_wr_sequence extends uvm_reg_sequence;
+   `uvm_object_utils( jtag_wr_sequence )
+
+   function new( string name = "" );
+      super.new( name );
+   endfunction: new
+
+   task body();
+      ieee1149_1_reg_block       jtag_reg_block;
+      uvm_status_e               status;
+      //uvm_reg_data_t             value;
+      bit [7:0]                  idcode;
+      bit [`MAX_DR_WIDTH-1:0]    dr_length;
+
+      $cast( jtag_reg_block, model );
+      dr_length = 8;
+      idcode = 8'h55;
+      write_reg( jtag_reg_block.idcode_reg, status, { idcode, dr_length } );
+  endtask: body
+endclass: jtag_wr_sequence
+
