@@ -125,7 +125,6 @@ class jtag_monitor extends uvm_monitor;
          c_state = TEST_LOGIC_RESET;
       end
       forever @(posedge jtag_vi.monitor_mp.tck) begin
-         `uvm_info( "mon",{ c_state.name }, UVM_DEBUG );
          if( c_state == CAPTURE_IR)begin
             //create a jtag transaction for boradcasting.
             jtag_tx = jtag_transaction::type_id::create( .name("jtag_tx") );
@@ -230,6 +229,8 @@ class jtag_monitor extends uvm_monitor;
                else if(jtag_vi.monitor_mp.tms == 1'b0) c_state = RUN_TEST_IDLE;
             end   
          endcase
+         
+         `uvm_info( "mon",{ c_state.name }, UVM_DEBUG );
       end
    endtask: run_phase    
 
@@ -258,6 +259,7 @@ class jtag_driver extends uvm_driver#( jtag_transaction );
    task run_phase( uvm_phase phase );
       jtag_transaction jtag_tx;
 	   string           fsm_nstate; 
+      jtag_vi.master_mp.tms <= 1;
       @(negedge jtag_vi.master_mp.trst);
       forever begin
          seq_item_port.get_next_item( jtag_tx );
@@ -310,10 +312,10 @@ class jtag_driver extends uvm_driver#( jtag_transaction );
             jtag_vi.master_mp.tdi <= jtag_tx.o_ir[i];
          end
 
-         //take jtag fsm into exit_ir state
+         //take jtag fsm into exit1_ir state
          @(posedge jtag_vi.master_mp.tck);
          jtag_vi.master_mp.tms <= 1;
-         fsm_nstate = "take jtag fsm into exit_ir state ";
+         fsm_nstate = "take jtag fsm into exit1_ir state ";
          `uvm_info( "jtag_driver", { fsm_nstate }, UVM_LOW );
         
          //take jtag fsm into update_ir state
@@ -349,10 +351,10 @@ class jtag_driver extends uvm_driver#( jtag_transaction );
             jtag_vi.master_mp.tdi <= jtag_tx.o_dr[i];
          end
 
-         //take jtag fsm into exit_dr state
+         //take jtag fsm into exit1_dr state
          @(posedge jtag_vi.master_mp.tck);
          jtag_vi.master_mp.tms <= 1;
-         fsm_nstate = "take jtag fsm into exit_dr state ";
+         fsm_nstate = "take jtag fsm into exit1_dr state ";
          `uvm_info( "jtag_driver", { fsm_nstate }, UVM_LOW );
         
          //take jtag fsm into update_dr state
@@ -367,6 +369,14 @@ class jtag_driver extends uvm_driver#( jtag_transaction );
          fsm_nstate = "take jtag fsm into run_test_idle state ";
          `uvm_info( "jtag_driver", { fsm_nstate }, UVM_LOW );
 
+         @(posedge jtag_vi.master_mp.tck);
+         jtag_vi.master_mp.tms <= 0;
+         @(posedge jtag_vi.master_mp.tck);
+         jtag_vi.master_mp.tms <= 0;
+         @(posedge jtag_vi.master_mp.tck);
+         jtag_vi.master_mp.tms <= 0;
+         @(posedge jtag_vi.master_mp.tck);
+         jtag_vi.master_mp.tms <= 0;
 	     seq_item_port.item_done();
       end
    endtask: run_phase
