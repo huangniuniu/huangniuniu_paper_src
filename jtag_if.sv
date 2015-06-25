@@ -7,18 +7,24 @@ interface jtag_if( input bit tck, input bit trst);
     logic tdo;
     logic tms;
 
-    //clocking negedge_cb @ ( negedge tck);
-    //   output tdo;
-    //endclocking: master_cb
+    clocking negedge_cb @ ( negedge tck);
+        default output #3ns;
+       output tdi;
+    endclocking: negedge_cb 
 
-    //clocking posedge_cb @ ( posedge tck);
-    //   input  tdi;
-    //   output tms;
-    //endclocking: slave_cb
+    clocking posedge_cb @ ( posedge tck);
+       input  tdo;
+       output tms;
+    endclocking: posedge_cb 
 
-    modport master_mp( input tck, trst, tdo, output tdi, tms);
+    clocking monitor_cb @ ( posedge tck );
+        input tdi;
+        input tdo;
+        input tms;
+    endclocking: monitor_cb
+    modport master_mp( input trst, clocking negedge_cb, clocking posedge_cb );
     modport slave_mp ( input tck, trst, tdi, tms, output tdo);
-    modport monitor_mp ( input tck, trst, tdi, tms, tdo);
+    modport monitor_mp ( input trst, clocking monitor_cb);
 endinterface: jtag_if
 
 

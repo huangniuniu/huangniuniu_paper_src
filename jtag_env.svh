@@ -71,24 +71,24 @@ class jtag_transaction extends uvm_sequence_item;
     function string print_queue();
        string     s;
 
-       $sformat(s, "%s\n ///////////////tdi_ir_queue//////////////////////////\n",s);
+       $sformat(s, "\n ///////////////tdi_ir_queue//////////////////////////\n" );
        foreach( tdi_ir_queue[i] )
-            $sformat(s, "%s%0b",s,tdi_ir_queue[i] );
+            $sformat(s, "%s%0b",s,tdi_ir_queue[$-i] );
        $sformat(s, "%s\n /////////////////////////////////////////////////////\n",s);
 
        $sformat(s, "%s\n ///////////////tdi_dr_queue//////////////////////////\n",s);
        foreach( tdi_dr_queue[i] )
-            $sformat(s, "%s%0b",s,tdi_dr_queue[i] );
+            $sformat(s, "%s%0b",s,tdi_dr_queue[$-i] );
        $sformat(s, "%s\n /////////////////////////////////////////////////////\n",s);
 
        $sformat(s, "%s\n ///////////////tdo_ir_queue//////////////////////////\n",s);
        foreach( tdo_ir_queue[i] )
-            $sformat(s, "%s%0b",s,tdo_ir_queue[i] );
+            $sformat(s, "%s%0b",s,tdo_ir_queue[$-i] );
        $sformat(s, "%s\n /////////////////////////////////////////////////////\n",s);
 
        $sformat(s, "%s\n ///////////////tdo_dr_queue//////////////////////////\n",s);
        foreach( tdo_dr_queue[i] )
-            $sformat(s, "%s%0b",s,tdo_dr_queue[i] );
+            $sformat(s, "%s%0b",s,tdo_dr_queue[$-i] );
        $sformat(s, "%s\n /////////////////////////////////////////////////////\n",s);
        return s;
     endfunction: print_queue
@@ -120,11 +120,13 @@ class jtag_monitor extends uvm_monitor;
       
       ieee_1149_1_fsm_e     c_state;
       jtag_transaction      jtag_tx;
-      
+     
       @(negedge jtag_vi.monitor_mp.trst) begin
          c_state = TEST_LOGIC_RESET;
       end
-      forever @(posedge jtag_vi.monitor_mp.tck) begin
+      forever @jtag_vi.monitor_mp.monitor_cb begin
+         `uvm_info( "mon",{ "before assignment ",c_state.name }, UVM_DEBUG );
+         `uvm_info( "mon",{ $sformatf( "tms = %0b, tdi = %0b", jtag_vi.monitor_mp.monitor_cb.tms, jtag_vi.monitor_mp.monitor_cb.tdi ) }, UVM_DEBUG );
          if( c_state == CAPTURE_IR)begin
             //create a jtag transaction for boradcasting.
             jtag_tx = jtag_transaction::type_id::create( .name("jtag_tx") );
@@ -133,104 +135,97 @@ class jtag_monitor extends uvm_monitor;
          
          if( c_state == UPDATE_DR)begin
             jtag_ap.write(jtag_tx);
-            jtag_tx.print_queue();
+            `uvm_info("mon",{jtag_tx.print_queue()}, UVM_LOW);
          end
 
          case (c_state)
             TEST_LOGIC_RESET: begin
-               if(jtag_vi.monitor_mp.tms == 1'b0) c_state = RUN_TEST_IDLE;
+               if(jtag_vi.monitor_mp.monitor_cb.tms == 1'b0) c_state = RUN_TEST_IDLE;
             end
             
             RUN_TEST_IDLE: begin
-               if(jtag_vi.monitor_mp.tms == 1'b1) c_state = SELECT_DR_SCAN;
+               if(jtag_vi.monitor_mp.monitor_cb.tms == 1'b1) c_state = SELECT_DR_SCAN;
             end
             
             SELECT_DR_SCAN: begin
-               if(jtag_vi.monitor_mp.tms == 1'b1) c_state = SELECT_IR_SCAN;
-               else if(jtag_vi.monitor_mp.tms == 1'b0) c_state = CAPTURE_DR;
+               if(jtag_vi.monitor_mp.monitor_cb.tms == 1'b1) c_state = SELECT_IR_SCAN;
+               else if(jtag_vi.monitor_mp.monitor_cb.tms == 1'b0) c_state = CAPTURE_DR;
             end
 
             CAPTURE_DR: begin
-               if(jtag_vi.monitor_mp.tms == 1'b1) c_state = EXIT1_DR;
-               else if(jtag_vi.monitor_mp.tms == 1'b0) c_state = SHIFT_DR;
+               if(jtag_vi.monitor_mp.monitor_cb.tms == 1'b1) c_state = EXIT1_DR;
+               else if(jtag_vi.monitor_mp.monitor_cb.tms == 1'b0) c_state = SHIFT_DR;
             end
             
             SHIFT_DR: begin
-               if(jtag_vi.monitor_mp.tms == 1'b1) c_state = EXIT1_DR;
+               if(jtag_vi.monitor_mp.monitor_cb.tms == 1'b1) c_state = EXIT1_DR;
 
                jtag_tx.o_dr_length = jtag_tx.o_dr_length + 1;
 
                //collects tdi/tdo data 
-               //jtag_tx.tdi_dr_queue.push_back( jtag_vi.monitor_mp.tdi );
-               jtag_tx.tdi_dr_queue = { jtag_tx.tdi_dr_queue,jtag_vi.monitor_mp.tdi };
-               //jtag_tx.tdo_dr_queue.push_back( jtag_vi.monitor_mp.tdo );
-               jtag_tx.tdo_dr_queue = { jtag_tx.tdo_dr_queue,jtag_vi.monitor_mp.tdo };
+               jtag_tx.tdi_dr_queue = { jtag_tx.tdi_dr_queue,jtag_vi.monitor_mp.monitor_cb.tdi };
+               jtag_tx.tdo_dr_queue = { jtag_tx.tdo_dr_queue,jtag_vi.monitor_mp.monitor_cb.tdo };
 
-               if( `DEBUG )begin
-                  foreach( jtag_tx.tdi_dr_queue[i] ) begin
-                     $display("%0b",jtag_tx.tdi_dr_queue[i]);
-                  end
-               end
             end
 
             EXIT1_DR: begin
-               if(jtag_vi.monitor_mp.tms == 1'b1) c_state = UPDATE_DR;
-               else if(jtag_vi.monitor_mp.tms == 1'b0) c_state = PAUSE_DR;
+               if(jtag_vi.monitor_mp.monitor_cb.tms == 1'b1) c_state = UPDATE_DR;
+               else if(jtag_vi.monitor_mp.monitor_cb.tms == 1'b0) c_state = PAUSE_DR;
             end
             
             PAUSE_DR: begin
-               if(jtag_vi.monitor_mp.tms == 1'b1) c_state = EXIT2_DR;
+               if(jtag_vi.monitor_mp.monitor_cb.tms == 1'b1) c_state = EXIT2_DR;
             end
             
             EXIT2_DR: begin
-               if(jtag_vi.monitor_mp.tms == 1'b1) c_state = UPDATE_DR;
-               else if(jtag_vi.monitor_mp.tms == 1'b0) c_state = SHIFT_DR;
+               if(jtag_vi.monitor_mp.monitor_cb.tms == 1'b1) c_state = UPDATE_DR;
+               else if(jtag_vi.monitor_mp.monitor_cb.tms == 1'b0) c_state = SHIFT_DR;
             end
             
             UPDATE_DR: begin
-               if(jtag_vi.monitor_mp.tms == 1'b1) c_state = SELECT_DR_SCAN;
-               else if(jtag_vi.monitor_mp.tms == 1'b0) c_state = RUN_TEST_IDLE;
+               if(jtag_vi.monitor_mp.monitor_cb.tms == 1'b1) c_state = SELECT_DR_SCAN;
+               else if(jtag_vi.monitor_mp.monitor_cb.tms == 1'b0) c_state = RUN_TEST_IDLE;
             end
             
             SELECT_IR_SCAN: begin
-               if(jtag_vi.monitor_mp.tms == 1'b1) c_state = TEST_LOGIC_RESET;
-               else if(jtag_vi.monitor_mp.tms == 1'b0) c_state = CAPTURE_IR;
+               if(jtag_vi.monitor_mp.monitor_cb.tms == 1'b1) c_state = TEST_LOGIC_RESET;
+               else if(jtag_vi.monitor_mp.monitor_cb.tms == 1'b0) c_state = CAPTURE_IR;
             end
 
             CAPTURE_IR: begin
-               if(jtag_vi.monitor_mp.tms == 1'b1) c_state = EXIT1_IR;
-               else if(jtag_vi.monitor_mp.tms == 1'b0) c_state = SHIFT_IR;
+               if(jtag_vi.monitor_mp.monitor_cb.tms == 1'b1) c_state = EXIT1_IR;
+               else if(jtag_vi.monitor_mp.monitor_cb.tms == 1'b0) c_state = SHIFT_IR;
             end
             
             SHIFT_IR: begin
-               if(jtag_vi.monitor_mp.tms == 1'b1) c_state = EXIT1_IR;
+               if(jtag_vi.monitor_mp.monitor_cb.tms == 1'b1) c_state = EXIT1_IR;
 
                //collects tdi/tdo data 
-               jtag_tx.tdi_ir_queue = { jtag_tx.tdi_ir_queue,jtag_vi.monitor_mp.tdi };
-               jtag_tx.tdo_ir_queue = { jtag_tx.tdo_ir_queue,jtag_vi.monitor_mp.tdo };
+               jtag_tx.tdi_ir_queue = { jtag_tx.tdi_ir_queue,jtag_vi.monitor_mp.monitor_cb.tdi };
+               jtag_tx.tdo_ir_queue = { jtag_tx.tdo_ir_queue,jtag_vi.monitor_mp.monitor_cb.tdo };
             end
 
             EXIT1_IR: begin
-               if(jtag_vi.monitor_mp.tms == 1'b1) c_state = UPDATE_IR;
-               else if(jtag_vi.monitor_mp.tms == 1'b0) c_state = PAUSE_IR;
+               if(jtag_vi.monitor_mp.monitor_cb.tms == 1'b1) c_state = UPDATE_IR;
+               else if(jtag_vi.monitor_mp.monitor_cb.tms == 1'b0) c_state = PAUSE_IR;
             end
             
             PAUSE_IR: begin
-               if(jtag_vi.monitor_mp.tms == 1'b1) c_state = EXIT2_IR;
+               if(jtag_vi.monitor_mp.monitor_cb.tms == 1'b1) c_state = EXIT2_IR;
             end
             
             EXIT2_IR: begin
-               if(jtag_vi.monitor_mp.tms == 1'b1) c_state = UPDATE_IR;
-               else if(jtag_vi.monitor_mp.tms == 1'b0) c_state = SHIFT_IR;
+               if(jtag_vi.monitor_mp.monitor_cb.tms == 1'b1) c_state = UPDATE_IR;
+               else if(jtag_vi.monitor_mp.monitor_cb.tms == 1'b0) c_state = SHIFT_IR;
             end
             
             UPDATE_IR: begin
-               if(jtag_vi.monitor_mp.tms == 1'b1) c_state = SELECT_DR_SCAN;
-               else if(jtag_vi.monitor_mp.tms == 1'b0) c_state = RUN_TEST_IDLE;
+               if(jtag_vi.monitor_mp.monitor_cb.tms == 1'b1) c_state = SELECT_DR_SCAN;
+               else if(jtag_vi.monitor_mp.monitor_cb.tms == 1'b0) c_state = RUN_TEST_IDLE;
             end   
          endcase
          
-         `uvm_info( "mon",{ c_state.name }, UVM_DEBUG );
+         `uvm_info( "mon",{ "after assignment ",c_state.name }, UVM_DEBUG );
       end
    endtask: run_phase    
 
@@ -258,125 +253,136 @@ class jtag_driver extends uvm_driver#( jtag_transaction );
 
    task run_phase( uvm_phase phase );
       jtag_transaction jtag_tx;
-	   string           fsm_nstate; 
-      jtag_vi.master_mp.tms <= 1;
+	  string           fsm_nstate;
+      
+      jtag_vi.master_mp.posedge_cb.tms <= 1;
       @(negedge jtag_vi.master_mp.trst);
       forever begin
          seq_item_port.get_next_item( jtag_tx );
          `uvm_info( "jtag_tx", { "\n",jtag_tx.convert2string() }, UVM_LOW );
          ////take jtag fsm into test_logic_reset state
          //for(int i = 0; i < 5; i ++) begin
-         //   @(posedge jtag_vi.master_mp.tck);
-         //   jtag_vi.master_mp.tms <= 1;
+         //   @jtag_vi.master_mp.posedge_cb;
+         //   jtag_vi.master_mp.posedge_cb.tms <= 1;
          //end
      
          //take jtag fsm into run_test_idle state
-         @(posedge jtag_vi.master_mp.tck);
-         jtag_vi.master_mp.tms <= 0;
+         @jtag_vi.master_mp.posedge_cb;
+         jtag_vi.master_mp.posedge_cb.tms <= 0;
 
          fsm_nstate = "take jtag fsm into run_test_idle state ";
-         `uvm_info( "jtag_driver", { fsm_nstate }, UVM_LOW );
+         `uvm_info( "jtag_driver", { fsm_nstate }, UVM_DEBUG );
 
          //take jtag fsm into select_dr_scan state
-         @(posedge jtag_vi.master_mp.tck);
-         jtag_vi.master_mp.tms <= 1;
+         @jtag_vi.master_mp.posedge_cb;
+         jtag_vi.master_mp.posedge_cb.tms <= 1;
          
          fsm_nstate = "take jtag fsm into select_dr_scan state ";
-         `uvm_info( "jtag_driver", { fsm_nstate }, UVM_LOW );
+         `uvm_info( "jtag_driver", { fsm_nstate }, UVM_DEBUG );
 
          //take jtag fsm into select_ir_scan state
-         @(posedge jtag_vi.master_mp.tck);
-         jtag_vi.master_mp.tms <= 1;
+         @jtag_vi.master_mp.posedge_cb;
+         jtag_vi.master_mp.posedge_cb.tms <= 1;
          
          fsm_nstate = "take jtag fsm into select_ir_scan state ";
-         `uvm_info( "jtag_driver", { fsm_nstate }, UVM_LOW );
+         `uvm_info( "jtag_driver", { fsm_nstate }, UVM_DEBUG );
 
          //take jtag fsm into capture_ir state
-         @(posedge jtag_vi.master_mp.tck);
-         jtag_vi.master_mp.tms <= 0;
+         @jtag_vi.master_mp.posedge_cb;
+         jtag_vi.master_mp.posedge_cb.tms <= 0;
          fsm_nstate = "take jtag fsm into capture_ir state ";
-         `uvm_info( "jtag_driver", { fsm_nstate }, UVM_LOW );
+         `uvm_info( "jtag_driver", { fsm_nstate }, UVM_DEBUG );
 
          //take jtag fsm into shift_ir state
          for(int i = 0; i < `IR_WIDTH; i ++) begin
-            @(posedge jtag_vi.master_mp.tck);
+            @jtag_vi.master_mp.posedge_cb;
             fsm_nstate = "take jtag fsm into shift_ir state ";
-            `uvm_info( "jtag_driver", { fsm_nstate }, UVM_LOW );
-            jtag_vi.master_mp.tms <= 0;
+            `uvm_info( "jtag_driver", { fsm_nstate }, UVM_DEBUG );
+            jtag_vi.master_mp.posedge_cb.tms <= 0;
             
             //collect shift out ir
-            jtag_tx.tdo_ir_queue = { jtag_tx.tdo_ir_queue, jtag_vi.master_mp.tdo };
+            //jtag_tx.tdo_ir_queue = { jtag_tx.tdo_ir_queue, jtag_vi.master_mp.posedge_cb.tdo };
             
             //shift ir in
-            @(negedge jtag_vi.master_mp.tck);
-            jtag_vi.master_mp.tdi <= jtag_tx.o_ir[i];
+            //@(negedge jtag_vi.master_mp.tck);
+            @jtag_vi.master_mp.negedge_cb;
+            if (i!=0) jtag_vi.master_mp.negedge_cb.tdi <= jtag_tx.o_ir[i-1];
          end
 
          //take jtag fsm into exit1_ir state
-         @(posedge jtag_vi.master_mp.tck);
-         jtag_vi.master_mp.tms <= 1;
+         @jtag_vi.master_mp.posedge_cb;
+         jtag_vi.master_mp.posedge_cb.tms <= 1;
+         
+         @jtag_vi.master_mp.negedge_cb;
+         jtag_vi.master_mp.negedge_cb.tdi <= jtag_tx.o_ir[`IR_WIDTH-1];
+         
          fsm_nstate = "take jtag fsm into exit1_ir state ";
-         `uvm_info( "jtag_driver", { fsm_nstate }, UVM_LOW );
+         `uvm_info( "jtag_driver", { fsm_nstate }, UVM_DEBUG );
         
          //take jtag fsm into update_ir state
-         @(posedge jtag_vi.master_mp.tck);
-         jtag_vi.master_mp.tms <= 1;
+         @jtag_vi.master_mp.posedge_cb;
+         jtag_vi.master_mp.posedge_cb.tms <= 1;
          fsm_nstate = "take jtag fsm into update_ir state ";
-         `uvm_info( "jtag_driver", { fsm_nstate }, UVM_LOW );
+         `uvm_info( "jtag_driver", { fsm_nstate }, UVM_DEBUG );
         
          //take jtag fsm into select_dr_scan state
-         @(posedge jtag_vi.master_mp.tck);
-         jtag_vi.master_mp.tms <= 1;
+         @jtag_vi.master_mp.posedge_cb;
+         jtag_vi.master_mp.posedge_cb.tms <= 1;
          fsm_nstate = "take jtag fsm into select_dr_scan state ";
-         `uvm_info( "jtag_driver", { fsm_nstate }, UVM_LOW );
+         `uvm_info( "jtag_driver", { fsm_nstate }, UVM_DEBUG );
          
          //take jtag fsm into capture_dr state
-         @(posedge jtag_vi.master_mp.tck);
-         jtag_vi.master_mp.tms <= 0;
+         @jtag_vi.master_mp.posedge_cb;
+         jtag_vi.master_mp.posedge_cb.tms <= 0;
          fsm_nstate = "take jtag fsm into capture_dr state ";
-         `uvm_info( "jtag_driver", { fsm_nstate }, UVM_LOW );
+         `uvm_info( "jtag_driver", { fsm_nstate }, UVM_DEBUG );
 
          //take jtag fsm into shift_dr state
          for(int i = 0; i < jtag_tx.o_dr_length; i ++) begin
-            @(posedge jtag_vi.master_mp.tck);
-            jtag_vi.master_mp.tms <= 0;
+            @jtag_vi.master_mp.posedge_cb;
+            jtag_vi.master_mp.posedge_cb.tms <= 0;
             
             fsm_nstate = "take jtag fsm into shift_dr state ";
-            `uvm_info( "jtag_driver", { fsm_nstate }, UVM_LOW );
+            `uvm_info( "jtag_driver", { fsm_nstate }, UVM_DEBUG );
             //collect shift out dr
-            jtag_tx.tdo_dr_queue = { jtag_tx.tdo_dr_queue, jtag_vi.master_mp.tdo };
+            //jtag_tx.tdo_dr_queue = { jtag_tx.tdo_dr_queue, jtag_vi.master_mp.posedge_cb.tdo };
             
             //shift dr in
-            @(negedge jtag_vi.master_mp.tck);
-            jtag_vi.master_mp.tdi <= jtag_tx.o_dr[i];
+            //@(negedge jtag_vi.master_mp.tck);
+            @jtag_vi.master_mp.negedge_cb;
+            if (i!=0) jtag_vi.master_mp.negedge_cb.tdi <= jtag_tx.o_dr[i-1];
          end
 
          //take jtag fsm into exit1_dr state
-         @(posedge jtag_vi.master_mp.tck);
-         jtag_vi.master_mp.tms <= 1;
+         @jtag_vi.master_mp.posedge_cb;
+         jtag_vi.master_mp.posedge_cb.tms <= 1;
+         
+         @jtag_vi.master_mp.negedge_cb;
+         jtag_vi.master_mp.negedge_cb.tdi <= jtag_tx.o_dr[jtag_tx.o_dr_length-1];
+         
          fsm_nstate = "take jtag fsm into exit1_dr state ";
-         `uvm_info( "jtag_driver", { fsm_nstate }, UVM_LOW );
+         `uvm_info( "jtag_driver", { fsm_nstate }, UVM_DEBUG );
         
          //take jtag fsm into update_dr state
-         @(posedge jtag_vi.master_mp.tck);
-         jtag_vi.master_mp.tms <= 1;
+         @jtag_vi.master_mp.posedge_cb;
+         jtag_vi.master_mp.posedge_cb.tms <= 1;
          fsm_nstate = "take jtag fsm into update_dr state ";
-         `uvm_info( "jtag_driver", { fsm_nstate }, UVM_LOW );
+         `uvm_info( "jtag_driver", { fsm_nstate }, UVM_DEBUG );
         
          //take jtag fsm into run_test_idle state
-         @(posedge jtag_vi.master_mp.tck);
-         jtag_vi.master_mp.tms <= 0;
+         @jtag_vi.master_mp.posedge_cb;
+         jtag_vi.master_mp.posedge_cb.tms <= 0;
          fsm_nstate = "take jtag fsm into run_test_idle state ";
-         `uvm_info( "jtag_driver", { fsm_nstate }, UVM_LOW );
+         `uvm_info( "jtag_driver", { fsm_nstate }, UVM_DEBUG );
 
-         @(posedge jtag_vi.master_mp.tck);
-         jtag_vi.master_mp.tms <= 0;
-         @(posedge jtag_vi.master_mp.tck);
-         jtag_vi.master_mp.tms <= 0;
-         @(posedge jtag_vi.master_mp.tck);
-         jtag_vi.master_mp.tms <= 0;
-         @(posedge jtag_vi.master_mp.tck);
-         jtag_vi.master_mp.tms <= 0;
+         @jtag_vi.master_mp.posedge_cb;
+         jtag_vi.master_mp.posedge_cb.tms <= 0;
+         @jtag_vi.master_mp.posedge_cb;
+         jtag_vi.master_mp.posedge_cb.tms <= 0;
+         @jtag_vi.master_mp.posedge_cb;
+         jtag_vi.master_mp.posedge_cb.tms <= 0;
+         @jtag_vi.master_mp.posedge_cb;
+         jtag_vi.master_mp.posedge_cb.tms <= 0;
 	     seq_item_port.item_done();
       end
    endtask: run_phase
@@ -428,7 +434,13 @@ class ieee_1149_1_reg_adapter extends uvm_reg_adapter;
           rw.data[`MAX_DR_WIDTH + i] = jtag_tx.tdi_dr_queue[i];
           if( jtag_tx.tdo_dr_queue[i] != jtag_tx.tdi_dr_queue[i] ) queue_comp_rslt = 0; 
       end
+      
+      rw.addr = 0;
+      foreach( jtag_tx.tdi_ir_queue[i] ) begin
+          rw.addr[i] = jtag_tx.tdi_ir_queue[i];
+      end
 
+      `uvm_info("adapter", {$sformatf("rw.addr=%0h,rw.data=%0h", rw.addr,rw.data)}, UVM_DEBUG);
       rw.kind = ( queue_comp_rslt ) ? UVM_READ : UVM_WRITE;
          
       rw.status = UVM_IS_OK;
@@ -491,7 +503,7 @@ class jtag_scoreboard extends uvm_subscriber#( jtag_transaction );
 
    function void write( jtag_transaction t);
 	   uvm_table_printer p = new;
-      `uvm_info("jtag_scoreboard",t.sprint(p),UVM_LOW);
+       `uvm_info("jtag_scoreboard",{"\n",t.sprint(p)},UVM_LOW);
    endfunction: write
 
 endclass:jtag_scoreboard
