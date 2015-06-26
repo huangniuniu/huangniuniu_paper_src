@@ -375,14 +375,7 @@ class jtag_driver extends uvm_driver#( jtag_transaction );
          fsm_nstate = "take jtag fsm into run_test_idle state ";
          `uvm_info( "jtag_driver", { fsm_nstate }, UVM_DEBUG );
 
-         @jtag_vi.master_mp.posedge_cb;
-         jtag_vi.master_mp.posedge_cb.tms <= 0;
-         @jtag_vi.master_mp.posedge_cb;
-         jtag_vi.master_mp.posedge_cb.tms <= 0;
-         @jtag_vi.master_mp.posedge_cb;
-         jtag_vi.master_mp.posedge_cb.tms <= 0;
-         @jtag_vi.master_mp.posedge_cb;
-         jtag_vi.master_mp.posedge_cb.tms <= 0;
+         repeat (2) @jtag_vi.master_mp.posedge_cb;
 	     seq_item_port.item_done();
       end
    endtask: run_phase
