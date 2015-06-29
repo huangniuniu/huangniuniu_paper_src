@@ -2,7 +2,6 @@
 // class: jtag_transaction
 //------------------------------------------------------------------------------
 class jtag_transaction extends uvm_sequence_item;
-
     rand  protocol_e                 protocol;
 
     rand  bit [`IR_WIDTH-1:0]        o_ir;
@@ -401,7 +400,6 @@ class ieee_1149_1_reg_adapter extends uvm_reg_adapter;
 
    virtual function uvm_sequence_item reg2bus( const ref uvm_reg_bus_op rw );
       jtag_transaction  jtag_tx = jtag_transaction::type_id::create("jtag_tx");
-    
       jtag_tx.protocol = IEEE_1149_1;
       jtag_tx.o_ir = rw.addr;
       jtag_tx.o_dr_length = rw.data[`MAX_DR_WIDTH-1 : 0];
@@ -435,7 +433,6 @@ class ieee_1149_1_reg_adapter extends uvm_reg_adapter;
 
       `uvm_info("adapter", {$sformatf("rw.addr=%0h,rw.data=%0h", rw.addr,rw.data)}, UVM_DEBUG);
       rw.kind = ( queue_comp_rslt ) ? UVM_READ : UVM_WRITE;
-         
       rw.status = UVM_IS_OK;
    endfunction: bus2reg
 endclass: ieee_1149_1_reg_adapter

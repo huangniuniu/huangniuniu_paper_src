@@ -1,4 +1,15 @@
 //------------------------------------------------------------------------------
+//TDR definition
+`define IDCODE_OPCODE         `IR_WIDTH'hfc
+`define IDCODE_LENGTH         8
+`define IDCODE_RST_VALUE      `IDCODE_LENGTH'h6c
+
+`define BYPASS_OPCODE         `IR_WIDTH'hff
+`define BYPASS_LENGTH         1
+`define BYPASS_RST_VALUE      `BYPASS_LENGTH'h0
+//------------------------------------------------------------------------------
+
+//------------------------------------------------------------------------------
 // Class: ieee1149_bypass_reg
 //------------------------------------------------------------------------------
 
@@ -9,7 +20,7 @@ class ieee1149_bypass_reg extends uvm_reg;
    rand uvm_reg_field bypass;
 
    function new( string name = "ieee1149_bypass_reg" );
-      super.new( .name( name ), .n_bits( `MAX_DR_WIDTH + 1 ), .has_coverage( UVM_NO_COVERAGE ) );
+      super.new( .name( name ), .n_bits( `MAX_DR_WIDTH + `BYPASS_LENGTH ), .has_coverage( UVM_NO_COVERAGE ) );
    endfunction: new
 
    virtual function void build();
@@ -26,11 +37,11 @@ class ieee1149_bypass_reg extends uvm_reg;
 
       bypass = uvm_reg_field::type_id::create( "bypass" );
       bypass.configure( .parent                 ( this ), 
-                       .size                   ( 1    ), 
+                       .size                   ( `BYPASS_LENGTH    ), 
                        .lsb_pos                ( `MAX_DR_WIDTH    ), 
                        .access                 ( "RW" ), 
                        .volatile               ( 0    ),
-                       .reset                  ( 0    ), 
+                       .reset                  ( `BYPASS_RST_VALUE    ), 
                        .has_reset              ( 1    ), 
                        .is_rand                ( 1    ), 
                        .individually_accessible( 0   ) );
@@ -49,7 +60,7 @@ class ieee1149_idcode_reg extends uvm_reg;
    rand uvm_reg_field idcode;
 
    function new( string name = "ieee1149_idcode_reg" );
-      super.new( .name( name ), .n_bits( `MAX_DR_WIDTH + 8 ), .has_coverage( UVM_NO_COVERAGE ) );
+      super.new( .name( name ), .n_bits( `MAX_DR_WIDTH + `IDCODE_LENGTH ), .has_coverage( UVM_NO_COVERAGE ) );
    endfunction: new
 
    virtual function void build();
@@ -66,11 +77,11 @@ class ieee1149_idcode_reg extends uvm_reg;
 
       idcode = uvm_reg_field::type_id::create( "idcode" );
       idcode.configure( .parent                 ( this ), 
-                       .size                   ( 8    ), 
+                       .size                   ( `IDCODE_LENGTH    ), 
                        .lsb_pos                ( `MAX_DR_WIDTH    ), 
                        .access                 ( "RW" ), 
                        .volatile               ( 0    ),
-                       .reset                  ( 8'he3    ), 
+                       .reset                  ( `IDCODE_RST_VALUE    ), 
                        .has_reset              ( 1    ), 
                        .is_rand                ( 1    ), 
                        .individually_accessible( 0   ) );
@@ -104,8 +115,8 @@ class ieee1149_1_reg_block extends uvm_reg_block;
 
       reg_map = create_map( .name( "reg_map" ), .base_addr( `IR_WIDTH'h00 ), 
                             .n_bytes( `MAX_N_BYTES ), .endian( UVM_LITTLE_ENDIAN ) );
-      reg_map.add_reg( .rg( bypass_reg ), .offset( `IR_WIDTH'hff ), .rights( "RW" ) );
-      reg_map.add_reg( .rg( idcode_reg  ), .offset( `IR_WIDTH'hfc ), .rights( "RW" ) );
+      reg_map.add_reg( .rg( bypass_reg ), .offset( `BYPASS_OPCODE), .rights( "RW" ) );
+      reg_map.add_reg( .rg( idcode_reg  ), .offset( `IDCODE_OPCODE ), .rights( "RW" ) );
       lock_model(); // finalize the address mapping
    endfunction: build
 
