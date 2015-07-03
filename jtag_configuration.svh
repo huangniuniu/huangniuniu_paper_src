@@ -12,6 +12,8 @@ class jtag_configuration extends uvm_object;
    virtual jtag_if          jtag_vi;
 
    ieee1149_1_reg_block     jtag_reg_block;
+
+   bit                      gen_stil_file;
 endclass: jtag_configuration
 
 

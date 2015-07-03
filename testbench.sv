@@ -32,6 +32,6 @@ module top;
    
    initial begin
      uvm_config_db#( virtual jtag_if)::set( .cntxt( null ), .inst_name( "uvm_test_top*" ), .field_name( "jtag_if" ), .value( jtag_if ) );
-      run_test();
+     run_test();
    end
 endmodule:top

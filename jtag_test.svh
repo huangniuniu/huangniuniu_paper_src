@@ -28,6 +28,7 @@ class jtag_base_test extends uvm_test;
       else `uvm_fatal("NOVIF", "Failed to get virtual interfaces form uvm_config_db.\n");
 
       uvm_config_db#( jtag_configuration )::set( .cntxt( this ), .inst_name( "*" ), .field_name( "jtag_cfg" ), .value( jtag_cfg ) );
+      uvm_config_db#( bit )::set( .cntxt( null ), .inst_name( "*" ), .field_name( "gen_stil_file" ), .value( `OFF ) );
       
    endfunction: build_phase
 
@@ -48,8 +49,24 @@ class jtag_1149_1_test extends jtag_base_test;
    function new( string name, uvm_component parent );
       super.new( name, parent );
    endfunction: new
+   
+   task configure_phase (uvm_phase phase)
+      phase.raise_objection( .obj( this ));
+      uvm_config_db#( bit )::set( .cntxt( null ), .inst_name( "*" ), .field_name( "gen_stil_file" ), .value( `ON ) );
+      phase.drop_objection( .obj( this ));
+   endtask
 
-   task run_phase( uvm_phase phase);
+   task pre_main_phase( uvm_phase phase);
+      protected int stil_fd;
+      bit           gen_stil_file;
+      phase.raise_objection( .obj( this ));
+      
+      assert(uvm_config_db#(bit)::get ( .cntxt( this ), .inst_name( "*" ), .field_name( "gen_stil_file" ), .value( this.gen_stil_file) ))
+      //STOP HERE
+      phase.drop_objection( .obj( this ));
+   endtask
+
+   task main_phase( uvm_phase phase);
       jtag_wr_sequence      jtag_reg_seq;
       
       phase.raise_objection( .obj( this ), .description( "start of test" ));
