@@ -237,23 +237,28 @@ endclass:jtag_monitor
 
 class jtag_driver extends uvm_driver#( jtag_transaction );
    `uvm_component_utils( jtag_driver )
-
-   virtual jtag_if jtag_vi;
-
+   
+   virtual  jtag_if jtag_vi;
+   bit      gen_stil_file;
    function new( string name, uvm_component parent );
       super.new( name, parent );
    endfunction: new
 
    function void build_phase( uvm_phase phase );
       super.build_phase( phase );
-      //uvm_config_db#( jtag_configuration)::get ( .cntxt( this ), .inst_name( "*" ), .field_name( "jtag_if" ), .value( jtag_vi) );
-	 
+      assert(uvm_config_db#(bit)::get ( .cntxt( this ), .inst_name( "*" ), .field_name( "gen_stil_file" ), .value( this.gen_stil_file) ));
    endfunction: build_phase
 
    task run_phase( uvm_phase phase );
-      jtag_transaction jtag_tx;
-	  string           fsm_nstate;
-      
+      jtag_transaction  jtag_tx;
+      string            fsm_nstate;
+      int               stil_fd;
+      //For STIL convertion
+      if(gen_stil_file == `ON)begin
+         //assert(uvm_config_db#(int)::get ( .cntxt( this ), .inst_name( "*" ), .field_name( "stil_fd" ), .value( stil_fd ) ));
+         //stil_fd = $fopen("jtag_1149_1_test.stil", "a");
+         //$fdisplay(stil_fd,"Signals {\n TCK In;\n } ");
+      end
       jtag_vi.master_mp.posedge_cb.tms <= 1;
       @(negedge jtag_vi.master_mp.trst);
       forever begin
@@ -546,4 +551,5 @@ class jtag_env extends uvm_env;
       reg_predictor.adapter = agent.jtag_reg_adapter;
       agent.jtag_ap.connect( reg_predictor.bus_in );
    endfunction: connect_phase
+
 endclass:jtag_env

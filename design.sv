@@ -1,7 +1,7 @@
 // Code your design here
-include "uvm_macros.svh"
-include "jtag_pkg.sv"
-include "jtag_if.sv"
+`include "uvm_macros.svh"
+`include "jtag_pkg.sv"
+`include "jtag_if.sv"
 
 //------------------------------------------------------------------------------
 // Module: system_shell
@@ -26,7 +26,28 @@ module system_shell( jtag_if.slave_mp jtag_if );
    wire           tck; 
    wire           tdi; 
    reg            muxed_tdo; 
-  
+   
+   //-------------------------------------------------------------------------------
+   //1149_1 reg block 
+   //-------------------------------------------------------------------------------
+   wire[`IR_WIDTH-1:0]              ir;
+   wire                             ir_tdo;
+   reg                              sel_ir;
+   reg                              sel_dr;
+
+   //idcode tdr
+   wire[`IDCODE_LENGTH-1:0]         idcode;
+   wire                             idcode_tdo;
+   reg                              sel_idcode;
+ 
+   //bypass tdr
+   wire[`BYPASS_LENGTH-1:0]         bypass;
+   wire                             bypass_tdo;
+   reg                              sel_bypass;
+   
+   //-------------------------------------------------------------------------------
+   //1149_1 FSM
+   //-------------------------------------------------------------------------------
    assign   reset = jtag_if.trst;
    assign   tck = jtag_if.tck;
    assign   tdi = jtag_if.tdi;
@@ -91,10 +112,6 @@ module system_shell( jtag_if.slave_mp jtag_if );
    //-------------------------------------------------------------------------------
    //1149_1 reg block 
    //-------------------------------------------------------------------------------
-   wire[`IR_WIDTH-1:0]      ir;
-   wire                     ir_tdo;
-   reg                      sel_ir;
-   reg                      sel_dr;
 
    assign sel_ir = c_state == `SELECT_IR_SCAN || c_state == `CAPTURE_IR || c_state == `SHIFT_IR || c_state == `EXIT1_IR || c_state == `UPDATE_IR;
    assign sel_dr = c_state == `SELECT_DR_SCAN || c_state == `CAPTURE_DR || c_state == `SHIFT_DR || c_state == `EXIT1_DR || c_state == `UPDATE_DR;
@@ -112,10 +129,6 @@ module system_shell( jtag_if.slave_mp jtag_if );
                      .SEL    (sel_ir)  
                     );  
 
-   //idcode tdr
-   wire[`IR_WIDTH-1:0]      idcode;
-   wire                     idcode_tdo;
-   reg                      sel_idcode;
 
    JTAGTDR #(8) idcode_tdr ( .RSTVAL (`IDCODE_RST_VALUE), 
                      .CAP_D  (idcode),
@@ -130,10 +143,6 @@ module system_shell( jtag_if.slave_mp jtag_if );
                      .SEL    (sel_idcode)  
                     );  
 
-   //bypass tdr
-   wire[`IR_WIDTH-1:0]      bypass;
-   wire                     bypass_tdo;
-   reg                      sel_bypass;
 
    JTAGTDR #(1) bypass_tdr ( .RSTVAL (`BYPASS_RST_VALUE), 
                      .CAP_D  (bypass),
@@ -154,56 +163,59 @@ module system_shell( jtag_if.slave_mp jtag_if );
 
 
 
-   module JTAGTDR (RSTVAL, CAP_D, TDR_Q, CAP, SHF, UPD, TRST, TCK, TDI, TDO, SEL);
-   
-   parameter LENGTH = 1;
-   
-   // 1149.1 interface
-   input       [LENGTH-1:0]  RSTVAL;           // Reset value for TDR
-   input       [LENGTH-1:0]  CAP_D;            // Capture value into TDR
-   output reg  [LENGTH-1:0]  TDR_Q;            // Update register from TDR
-   
-   input                     CAP;              // TAP state machine is in the Capture-DR
-   input                     SHF;              // TAP state machine is in the Shift-DR
-   input                     UPD;              // TAP state machine is in the Update-DR
-   input                     TRST;             // Test reset
-   input                     TCK;              // Test clock
-   input                     TDI;              // Test data input
-   output reg                TDO;              // Test data output
-   input                     SEL;              // Connect to 1687 SIB or 1149.1 decoded instruction or just 1'b1
-   
-   reg TdrShf;
-   reg TdrCap;
-   reg TdrUpd;
-   reg [LENGTH-1:0] ShTdr;
-   
-   always @* begin
-     TdrShf = SHF & SEL;  // Only shift this TDR segment if the SEL for this TDR is set
-     TdrCap = CAP & SEL;  // Only capture this TDR segment if the SEL for this TDR is set
-     TdrUpd = UPD & SEL;  // Only update this TDR segment if the SEL for this TDR is set
-   end
-
-   always @(posedge TRST or posedge TCK) begin
-      if(TRST) begin
-         TDR_Q <= RSTVAL;
-      end
-      else begin
-         if(TdrUpd) TDR_Q <= ShTdr;
-         if(TdrCap) ShTdr <= CAP_D;
-         if(TdrShf) begin
-            ShTdr <= (LENGTH-1) ? {TDI,ShTdr[LENGTH-1:1]} : TDI;
-         end
-      end
-   end
-   always @(posedge TRST or negedge TCK) begin
-      if(TRST) begin
-         TDO <= 1'b0;
-      end
-      else begin
-         if(TdrShf) 
-            TDO <= ShTdr[0];
-      end
-   end
-
-   endmodule: JTAGTDR
 endmodule: system_shell
+
+module JTAGTDR (RSTVAL, CAP_D, TDR_Q, CAP, SHF, UPD, TRST, TCK, TDI, TDO, SEL);
+
+parameter LENGTH = 1;
+
+// 1149.1 interface
+input       [LENGTH-1:0]  RSTVAL;           // Reset value for TDR
+input       [LENGTH-1:0]  CAP_D;            // Capture value into TDR
+output reg  [LENGTH-1:0]  TDR_Q;            // Update register from TDR
+
+input                     CAP;              // TAP state machine is in the Capture-DR
+input                     SHF;              // TAP state machine is in the Shift-DR
+input                     UPD;              // TAP state machine is in the Update-DR
+input                     TRST;             // Test reset
+input                     TCK;              // Test clock
+input                     TDI;              // Test data input
+output reg                TDO;              // Test data output
+input                     SEL;              // Connect to 1687 SIB or 1149.1 decoded instruction or just 1'b1
+
+reg TdrShf;
+reg TdrCap;
+reg TdrUpd;
+reg [LENGTH-1:0] ShTdr;
+reg temp;
+
+always @* begin
+  TdrShf = SHF & SEL;  // Only shift this TDR segment if the SEL for this TDR is set
+  TdrCap = CAP & SEL;  // Only capture this TDR segment if the SEL for this TDR is set
+  TdrUpd = UPD & SEL;  // Only update this TDR segment if the SEL for this TDR is set
+end
+
+always @(posedge TRST or posedge TCK) begin
+   if(TRST) begin
+      TDR_Q <= RSTVAL;
+   end
+   else begin
+      if(TdrUpd) TDR_Q <= ShTdr;
+      if(TdrCap) ShTdr <= CAP_D;
+      if(TdrShf) begin
+         {ShTdr,temp} <= {TDI,ShTdr};
+      end
+   end
+end
+always @(posedge TRST or negedge TCK) begin
+   if(TRST) begin
+      TDO <= 1'b0;
+   end
+   else begin
+      if(TdrShf) 
+         TDO <= ShTdr[0];
+   end
+end
+
+endmodule: JTAGTDR
+

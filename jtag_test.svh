@@ -50,19 +50,28 @@ class jtag_1149_1_test extends jtag_base_test;
       super.new( name, parent );
    endfunction: new
    
-   task configure_phase (uvm_phase phase)
+   task configure_phase (uvm_phase phase);
       phase.raise_objection( .obj( this ));
       uvm_config_db#( bit )::set( .cntxt( null ), .inst_name( "*" ), .field_name( "gen_stil_file" ), .value( `ON ) );
       phase.drop_objection( .obj( this ));
    endtask
 
    task pre_main_phase( uvm_phase phase);
-      protected int stil_fd;
+      int stil_fd;
       bit           gen_stil_file;
       phase.raise_objection( .obj( this ));
       
-      assert(uvm_config_db#(bit)::get ( .cntxt( this ), .inst_name( "*" ), .field_name( "gen_stil_file" ), .value( this.gen_stil_file) ))
-      //STOP HERE
+      assert(uvm_config_db#(bit)::get ( .cntxt( null ), .inst_name( "*" ), .field_name( "gen_stil_file" ), .value( gen_stil_file) ));
+      if (gen_stil_file == `ON)begin
+         stil_fd = $fopen("jtag_1149_1_test.stil", "w");
+         $fdisplay(stil_fd,"STIL 1.0;");
+         uvm_config_db#( int )::set( .cntxt( null ), .inst_name( "*" ), .field_name( "stil_fd" ), .value( stil_fd ) );
+         $display("stil_fd = %h",stil_fd);
+         $fclose(stil_fd);
+         stil_fd = $fopen("jtag_1149_1_test.stil", "a");
+         $fdisplay(stil_fd,"header1.0;");
+         $display("stil_fd = %h",stil_fd);
+      end
       phase.drop_objection( .obj( this ));
    endtask
 
@@ -76,7 +85,7 @@ class jtag_1149_1_test extends jtag_base_test;
       jtag_reg_seq.start( .sequencer( env.agent.sqr ) );
       
       phase.drop_objection( .obj( this ), .description( "end of test" ));
-     endtask: run_phase
+     endtask: main_phase
 endclass: jtag_1149_1_test
 
 //---------------------------------------------------------------------------
