@@ -14,6 +14,8 @@ class jtag_configuration extends uvm_object;
    ieee1149_1_reg_block     jtag_reg_block;
 
    bit                      gen_stil_file;
+   string                   stil_file_name;
+   string                   tck_period;
 endclass: jtag_configuration
 
 

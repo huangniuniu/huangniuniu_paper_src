@@ -27,8 +27,8 @@ class jtag_base_test extends uvm_test;
       assert(uvm_config_db#( virtual jtag_if )::get ( .cntxt( this ), .inst_name( "*" ), .field_name( "jtag_if" ), .value( jtag_cfg.jtag_vi) ))
       else `uvm_fatal("NOVIF", "Failed to get virtual interfaces form uvm_config_db.\n");
 
+      jtag_cfg.gen_stil_file = `OFF;
       uvm_config_db#( jtag_configuration )::set( .cntxt( this ), .inst_name( "*" ), .field_name( "jtag_cfg" ), .value( jtag_cfg ) );
-      uvm_config_db#( bit )::set( .cntxt( null ), .inst_name( "*" ), .field_name( "gen_stil_file" ), .value( `OFF ) );
       
    endfunction: build_phase
 
@@ -50,30 +50,13 @@ class jtag_1149_1_test extends jtag_base_test;
       super.new( name, parent );
    endfunction: new
    
-   task configure_phase (uvm_phase phase);
-      phase.raise_objection( .obj( this ));
-      uvm_config_db#( bit )::set( .cntxt( null ), .inst_name( "*" ), .field_name( "gen_stil_file" ), .value( `ON ) );
-      phase.drop_objection( .obj( this ));
-   endtask
+   function build_phase( uvm_phase phase);
+      super.build_phase( phase );
 
-   task pre_main_phase( uvm_phase phase);
-      int stil_fd;
-      bit           gen_stil_file;
-      phase.raise_objection( .obj( this ));
-      
-      assert(uvm_config_db#(bit)::get ( .cntxt( null ), .inst_name( "*" ), .field_name( "gen_stil_file" ), .value( gen_stil_file) ));
-      if (gen_stil_file == `ON)begin
-         stil_fd = $fopen("jtag_1149_1_test.stil", "w");
-         $fdisplay(stil_fd,"STIL 1.0;");
-         uvm_config_db#( int )::set( .cntxt( null ), .inst_name( "*" ), .field_name( "stil_fd" ), .value( stil_fd ) );
-         $display("stil_fd = %h",stil_fd);
-         $fclose(stil_fd);
-         stil_fd = $fopen("jtag_1149_1_test.stil", "a");
-         $fdisplay(stil_fd,"header1.0;");
-         $display("stil_fd = %h",stil_fd);
-      end
-      phase.drop_objection( .obj( this ));
-   endtask
+      jtag_cfg.gen_stil_file = `ON;
+      jtag_cfg.stil_file_name = "jtag_1149_1_test.stil";
+      uvm_config_db#( jtag_configuration )::set( .cntxt( this ), .inst_name( "*" ), .field_name( "jtag_cfg" ), .value( jtag_cfg ) );
+   endfunction: build_phase
 
    task main_phase( uvm_phase phase);
       jtag_wr_sequence      jtag_reg_seq;

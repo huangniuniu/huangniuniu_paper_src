@@ -238,15 +238,23 @@ endclass:jtag_monitor
 class jtag_driver extends uvm_driver#( jtag_transaction );
    `uvm_component_utils( jtag_driver )
    
-   virtual  jtag_if jtag_vi;
-   bit      gen_stil_file;
+   virtual jtag_if         jtag_vi;
+   bit                     gen_stil_file;
+   string                  stil_file_name;
+   jtag_configuration      jtag_cfg;
+
    function new( string name, uvm_component parent );
       super.new( name, parent );
    endfunction: new
 
    function void build_phase( uvm_phase phase );
       super.build_phase( phase );
-      assert(uvm_config_db#(bit)::get ( .cntxt( this ), .inst_name( "*" ), .field_name( "gen_stil_file" ), .value( this.gen_stil_file) ));
+
+      jtag_cfg = jtag_configuration::type_id::create( .name( "jtag_cfg" ) );
+      assert(uvm_config_db#(jtag_configuration)::get ( .cntxt( this ), .inst_name( "*" ), .field_name( "jtag_cfg" ), .value( this.jtag_cfg) ));
+
+      gen_stil_file = jtag_cfg.gen_stil_file;
+      stil_file_name = jtag_cfg.stil_file_name;
    endfunction: build_phase
 
    task run_phase( uvm_phase phase );
@@ -255,9 +263,8 @@ class jtag_driver extends uvm_driver#( jtag_transaction );
       int               stil_fd;
       //For STIL convertion
       if(gen_stil_file == `ON)begin
-         //assert(uvm_config_db#(int)::get ( .cntxt( this ), .inst_name( "*" ), .field_name( "stil_fd" ), .value( stil_fd ) ));
-         //stil_fd = $fopen("jtag_1149_1_test.stil", "a");
-         //$fdisplay(stil_fd,"Signals {\n TCK In;\n } ");
+         stil_fd = $fopen("jtag_1149_1_test.stil", "a");
+         $fdisplay(stil_fd,"Signals {\n TCK In;\n } ");
       end
       jtag_vi.master_mp.posedge_cb.tms <= 1;
       @(negedge jtag_vi.master_mp.trst);
