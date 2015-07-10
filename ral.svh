@@ -60,7 +60,7 @@ class ieee1149_idcode_reg extends uvm_reg;
    rand uvm_reg_field idcode;
 
    function new( string name = "ieee1149_idcode_reg" );
-      super.new( .name( name ), .n_bits( `MAX_DR_WIDTH + `IDCODE_LENGTH ), .has_coverage( UVM_NO_COVERAGE ) );
+      super.new( .name( name ), .n_bits( `MAX_DR_WIDTH + `IDCODE_LENGTH + 3 +`IR_WIDTH + `IDCODE_LENGTH ), .has_coverage( UVM_NO_COVERAGE ) );
    endfunction: new
 
    virtual function void build();
@@ -85,6 +85,67 @@ class ieee1149_idcode_reg extends uvm_reg;
                        .has_reset              ( 1    ), 
                        .is_rand                ( 1    ), 
                        .individually_accessible( 0   ) );
+
+      gen_stil = uvm_reg_field::type_id::create( "gen_stil" );
+      gen_stil.configure( .parent                 ( this ), 
+                       .size                   ( 1), 
+                       .lsb_pos                ( `MAX_DR_WIDTH+`IDCODE_LENGTH    ), 
+                       .access                 ( "WO" ), 
+                       .volatile               ( 0    ),
+                       .reset                  ( 0), 
+                       .has_reset              ( 0    ), 
+                       .is_rand                ( 0    ), 
+                       .individually_accessible( 0   ) );
+
+      chk_ir_tdo = uvm_reg_field::type_id::create( "chk_ir_tdo" );
+      chk_ir_tdo.configure( .parent                 ( this ), 
+                       .size                   ( 1), 
+                       .lsb_pos                ( `MAX_DR_WIDTH+`IDCODE_LENGTH+1    ), 
+                       .access                 ( "WO" ), 
+                       .volatile               ( 0    ),
+                       .reset                  ( 0), 
+                       .has_reset              ( 0    ), 
+                       .is_rand                ( 0    ), 
+                       .individually_accessible( 0   ) );
+
+      chk_dr_tdo = uvm_reg_field::type_id::create( "chk_dr_tdo" );
+      chk_dr_tdo.configure( .parent                 ( this ), 
+                       .size                   ( 1), 
+                       .lsb_pos                ( `MAX_DR_WIDTH+`IDCODE_LENGTH+2   ), 
+                       .access                 ( "WO" ), 
+                       .volatile               ( 0    ),
+                       .reset                  ( 0), 
+                       .has_reset              ( 0    ), 
+                       .is_rand                ( 0    ), 
+                       .individually_accessible( 0   ) );
+
+      exp_ir_value = uvm_reg_field::type_id::create( "exp_ir_value" );
+      exp_ir_value.configure( .parent                 ( this ), 
+                       .size                   ( `IR_WIDTH), 
+                       .lsb_pos                ( `MAX_DR_WIDTH+`IDCODE_LENGTH+3   ), 
+                       .access                 ( "WO" ), 
+                       .volatile               ( 0    ),
+                       .reset                  ( 0), 
+                       .has_reset              ( 0    ), 
+                       .is_rand                ( 0    ), 
+                       .individually_accessible( 0   ) );
+
+      exp_dr_value = uvm_reg_field::type_id::create( "exp_dr_value" );
+      exp_dr_value.configure( .parent                 ( this ), 
+                       .size                   ( `IDCODE_LENGTH), 
+                       .lsb_pos                ( `MAX_DR_WIDTH+`IDCODE_LENGTH+3+`IR_WIDTH), 
+                       .access                 ( "WO" ), 
+                       .volatile               ( 0    ),
+                       .reset                  ( 0), 
+                       .has_reset              ( 0    ), 
+                       .is_rand                ( 0    ), 
+                       .individually_accessible( 0   ) );
+
+
+
+
+
+
 
    endfunction: build
 endclass: ieee1149_idcode_reg

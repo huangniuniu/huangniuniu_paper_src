@@ -4,6 +4,7 @@
 // module: top
 //---------------------------------------------------------------------------
 module top;
+   `timescale 1ns/1ns
    import uvm_pkg::*;
 
    logic          tck;
@@ -14,7 +15,7 @@ module top;
    initial begin
       tck = 0;
       #10ns;
-      forever #10ns tck = ~tck;
+      forever #`TCK_HALF_PERIOD tck = ~tck;
    end
 
    initial begin
@@ -31,7 +32,7 @@ module top;
    end
    
    initial begin
-     uvm_config_db#( virtual jtag_if)::set( .cntxt( null ), .inst_name( "uvm_test_top*" ), .field_name( "jtag_if" ), .value( jtag_if ) );
-     run_test();
+      uvm_config_db#( virtual jtag_if)::set( .cntxt( null ), .inst_name( "uvm_test_top*" ), .field_name( "jtag_if" ), .value( jtag_if ) );
+      run_test();
    end
 endmodule:top

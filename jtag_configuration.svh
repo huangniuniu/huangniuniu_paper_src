@@ -15,7 +15,7 @@ class jtag_configuration extends uvm_object;
 
    bit                      gen_stil_file;
    string                   stil_file_name;
-   string                   tck_period;
+   int                      tck_half_period;
 endclass: jtag_configuration
 
 

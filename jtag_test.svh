@@ -50,11 +50,12 @@ class jtag_1149_1_test extends jtag_base_test;
       super.new( name, parent );
    endfunction: new
    
-   function build_phase( uvm_phase phase);
+   function void build_phase( uvm_phase phase);
       super.build_phase( phase );
 
       jtag_cfg.gen_stil_file = `ON;
       jtag_cfg.stil_file_name = "jtag_1149_1_test.stil";
+      jtag_cfg.tck_half_period = `TCK_HALF_PERIOD;
       uvm_config_db#( jtag_configuration )::set( .cntxt( this ), .inst_name( "*" ), .field_name( "jtag_cfg" ), .value( jtag_cfg ) );
    endfunction: build_phase
 

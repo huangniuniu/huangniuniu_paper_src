@@ -35,13 +35,20 @@ class jtag_wr_sequence extends uvm_reg_sequence;
       ieee1149_1_reg_block       jtag_reg_block;
       uvm_status_e               status;
       //uvm_reg_data_t             value;
-      bit [7:0]                  idcode;
+      bit [`IDCODE_LENGTH-1:0]   idcode,exp_dr_value;
       bit [`MAX_DR_WIDTH-1:0]    dr_length;
+      bit [`IR_WIDTH-1:0]        exp_ir_value;
+      bit                        gen_stil,chk_ir_tdo,chk_dr_tdo;
 
       $cast( jtag_reg_block, model );
-      dr_length = 8;
-      idcode = 8'h55;
-      write_reg( jtag_reg_block.idcode_reg, status, { idcode, dr_length } );
+      dr_length = `IDCODE_LENGTH;
+      idcode = `IDCODE_LENGTH'h55;
+      gen_stil = 1;
+      chk_ir_tdo = 1;
+      chk_dr_tdo = 1;
+      exp_ir_value = `IDCODE_OPCODE;
+      exp_dr_value = `IDCODE_RST_VALUE;
+      write_reg( jtag_reg_block.idcode_reg, status, { exp_dr_value,exp_ir_value,chk_dr_tdo,chk_ir_tdo,gen_stil,idcode, dr_length } );
   endtask: body
 endclass: jtag_wr_sequence
 
