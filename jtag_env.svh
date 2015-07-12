@@ -68,6 +68,7 @@ class jtag_transaction extends uvm_sequence_item;
             $sformat(s, "%s%0h",s,hex_value);
         end
         
+        $sformat(s, "%s\n gen_stil = \t%d\n chk_ir_tdo = \t%d\n chk_dr_tdo = \t%d\n",s, gen_stil, chk_ir_tdo, chk_dr_tdo);
         $sformat(s, "%s\n ////////////////////////////////////////////////////////////\n",s);
         return s;
     endfunction: convert2string
@@ -94,10 +95,37 @@ class jtag_transaction extends uvm_sequence_item;
        foreach( tdo_dr_queue[i] )
             $sformat(s, "%s%0b",s,tdo_dr_queue[$-i] );
        $sformat(s, "%s\n /////////////////////////////////////////////////////\n",s);
+       if(chk_ir_tdo) begin
+          $sformat(s, "%s\n ///////////////exp_tdo_ir_queue//////////////////////////\n",s);
+          foreach( exp_tdo_ir_queue[i] )
+               $sformat(s, "%s%0b",s,exp_tdo_ir_queue[$-i] );
+          $sformat(s, "%s\n /////////////////////////////////////////////////////\n",s);
+       end
+       if(chk_dr_tdo) begin
+          $sformat(s, "%s\n ///////////////exp_tdo_dr_queue//////////////////////////\n",s);
+          foreach( exp_tdo_dr_queue[i] )
+               $sformat(s, "%s%0b",s,exp_tdo_dr_queue[$-i] );
+          $sformat(s, "%s\n /////////////////////////////////////////////////////\n",s);
+       end
        return s;
     endfunction: print_queue
 endclass:jtag_transaction
 
+//------------------------------------------------------------------------------
+// class:bus_reg_ext 
+//------------------------------------------------------------------------------
+//This class is used to send information from a sequence to the adapter
+//STOP HERE
+class bus_reg_ext extends uvm_object;
+  `uvm_object_utils(bus_reg_ext)
+
+  string info = "empty";
+  
+  function new(string name = "bus_reg_ext");
+    super.new(name);
+  endfunction : new
+    
+endclass : bus_reg_ext
 //------------------------------------------------------------------------------
 // class: jtag_monitor
 //------------------------------------------------------------------------------
@@ -270,7 +298,8 @@ class jtag_driver extends uvm_driver#( jtag_transaction );
       string            fsm_nstate;
       string            stil_str;
       int               stil_fd;
-      
+      string            chk_tdo_value;
+
       //For STIL convertion
       if(gen_stil_file == `ON)begin
          stil_fd = $fopen("jtag_1149_1_test.stil", "a");
@@ -403,21 +432,21 @@ class jtag_driver extends uvm_driver#( jtag_transaction );
             `uvm_info( "jtag_driver", { fsm_nstate }, UVM_DEBUG );
             jtag_vi.master_mp.posedge_cb.tms <= 0;
             
-            //collect shift out ir
-            //jtag_tx.tdo_ir_queue = { jtag_tx.tdo_ir_queue, jtag_vi.master_mp.posedge_cb.tdo };
-            
-            //shift ir in
-            //@(negedge jtag_vi.master_mp.tck);
             @jtag_vi.master_mp.negedge_cb;
             if (i!=0) jtag_vi.master_mp.negedge_cb.tdi <= jtag_tx.o_ir[i-1];
             
             if(gen_stil_file == `ON)begin
-            stil_str = $sformatf({"   //take jtag fsm into shift_ir state\n",
-                                  "   V { TCK = P; TDI = %b; TMS = 0; TRST = 0; TDO = X;}\n" }, (i != 0) ? jtag_tx.o_ir[i-1] : 1'b0);
-            $fdisplay(stil_fd,stil_str);
-         end
-
-         end
+               if(jtag_tx.chk_ir_tdo) 
+                  if(i != 0)
+                     if(jtag_tx.exp_tdo_ir_queue[i-1])  chk_tdo_value = "H";
+                     else chk_tdo_value = "L";
+                  else chk_tdo_value = "X";
+               else chk_tdo_value = "X";
+               stil_str = $sformatf({"   //take jtag fsm into shift_ir state\n",
+                                     "   V { TCK = P; TDI = %b; TMS = 0; TRST = 0; TDO = %s;}\n" }, (i != 0) ? jtag_tx.o_ir[i-1] : 1'b0,chk_tdo_value);
+               $fdisplay(stil_fd,stil_str);
+            end// if(gen_stil_file == `ON)
+         end //for(int i = 0; i < `IR_WIDTH; i ++) begin
 
          //take jtag fsm into exit1_ir state
          @jtag_vi.master_mp.posedge_cb;
@@ -428,24 +457,49 @@ class jtag_driver extends uvm_driver#( jtag_transaction );
          
          fsm_nstate = "take jtag fsm into exit1_ir state ";
          `uvm_info( "jtag_driver", { fsm_nstate }, UVM_DEBUG );
-        
+         
+         if(gen_stil_file == `ON)begin
+            if(jtag_tx.chk_ir_tdo) 
+              if(jtag_tx.exp_tdo_ir_queue[`IR_WIDTH-1])  chk_tdo_value = "H";
+              else chk_tdo_value = "L";
+            else chk_tdo_value = "X";
+            stil_str = $sformatf({"   //take jtag fsm into exit1_ir state\n",
+                                  "   V { TCK = P; TDI = %b; TMS = 1; TRST = 0; TDO = %s;}\n" }, jtag_tx.o_ir[`IR_WIDTH-1],chk_tdo_value);
+            $fdisplay(stil_fd,stil_str);
+         end// if(gen_stil_file == `ON)
+
          //take jtag fsm into update_ir state
          @jtag_vi.master_mp.posedge_cb;
          jtag_vi.master_mp.posedge_cb.tms <= 1;
          fsm_nstate = "take jtag fsm into update_ir state ";
          `uvm_info( "jtag_driver", { fsm_nstate }, UVM_DEBUG );
-        
+         
+         if(gen_stil_file == `ON)begin
+            stil_str = $sformatf({"   //take jtag fsm into update_ir state\n",
+                                  "   V { TCK = P; TDI = 0; TMS = 1; TRST = 0; TDO = X;}\n" });
+            $fdisplay(stil_fd,stil_str);
+         end       
          //take jtag fsm into select_dr_scan state
          @jtag_vi.master_mp.posedge_cb;
          jtag_vi.master_mp.posedge_cb.tms <= 1;
          fsm_nstate = "take jtag fsm into select_dr_scan state ";
          `uvm_info( "jtag_driver", { fsm_nstate }, UVM_DEBUG );
+         if(gen_stil_file == `ON)begin
+            stil_str = $sformatf({"   //take jtag fsm into select_dr_scan state\n",
+                                  "   V { TCK = P; TDI = 0; TMS = 1; TRST = 0; TDO = X;}\n" });
+            $fdisplay(stil_fd,stil_str);
+         end       
          
          //take jtag fsm into capture_dr state
          @jtag_vi.master_mp.posedge_cb;
          jtag_vi.master_mp.posedge_cb.tms <= 0;
          fsm_nstate = "take jtag fsm into capture_dr state ";
          `uvm_info( "jtag_driver", { fsm_nstate }, UVM_DEBUG );
+         if(gen_stil_file == `ON)begin
+            stil_str = $sformatf({"   //take jtag fsm into capture_dr state\n",
+                                  "   V { TCK = P; TDI = 0; TMS = 0; TRST = 0; TDO = X;}\n" });
+            $fdisplay(stil_fd,stil_str);
+         end       
 
          //take jtag fsm into shift_dr state
          for(int i = 0; i < jtag_tx.o_dr_length; i ++) begin
@@ -454,13 +508,21 @@ class jtag_driver extends uvm_driver#( jtag_transaction );
             
             fsm_nstate = "take jtag fsm into shift_dr state ";
             `uvm_info( "jtag_driver", { fsm_nstate }, UVM_DEBUG );
-            //collect shift out dr
-            //jtag_tx.tdo_dr_queue = { jtag_tx.tdo_dr_queue, jtag_vi.master_mp.posedge_cb.tdo };
-            
-            //shift dr in
-            //@(negedge jtag_vi.master_mp.tck);
+
             @jtag_vi.master_mp.negedge_cb;
             if (i!=0) jtag_vi.master_mp.negedge_cb.tdi <= jtag_tx.o_dr[i-1];
+            if(gen_stil_file == `ON)begin
+               if(jtag_tx.chk_dr_tdo) 
+                  if(i != 0)
+                     if(jtag_tx.exp_tdo_dr_queue[i-1])  chk_tdo_value = "H";
+                     else chk_tdo_value = "L";
+                  else chk_tdo_value = "X";
+               else chk_tdo_value = "X";
+               stil_str = $sformatf({"   //take jtag fsm into shift_dr state\n",
+                                     "   V { TCK = P; TDI = %b; TMS = 0; TRST = 0; TDO = %s;}\n" }, (i != 0) ? jtag_tx.o_dr[i-1] : 1'b0,chk_tdo_value);
+               $fdisplay(stil_fd,stil_str);
+            end// if(gen_stil_file == `ON)
+
          end
 
          //take jtag fsm into exit1_dr state
@@ -472,23 +534,46 @@ class jtag_driver extends uvm_driver#( jtag_transaction );
          
          fsm_nstate = "take jtag fsm into exit1_dr state ";
          `uvm_info( "jtag_driver", { fsm_nstate }, UVM_DEBUG );
-        
+ 
+         if(gen_stil_file == `ON)begin
+            if(jtag_tx.chk_dr_tdo) 
+              if(jtag_tx.exp_tdo_dr_queue[jtag_tx.o_dr_length-1])  chk_tdo_value = "H";
+              else chk_tdo_value = "L";
+            else chk_tdo_value = "X";
+            stil_str = $sformatf({"   //take jtag fsm into exit1_dr state\n",
+                                  "   V { TCK = P; TDI = %b; TMS = 1; TRST = 0; TDO = %s;}\n" }, jtag_tx.o_dr[jtag_tx.o_dr_length-1],chk_tdo_value);
+            $fdisplay(stil_fd,stil_str);
+         end// if(gen_stil_file == `ON)
+
+       
          //take jtag fsm into update_dr state
          @jtag_vi.master_mp.posedge_cb;
          jtag_vi.master_mp.posedge_cb.tms <= 1;
          fsm_nstate = "take jtag fsm into update_dr state ";
          `uvm_info( "jtag_driver", { fsm_nstate }, UVM_DEBUG );
-        
+          
+         if(gen_stil_file == `ON)begin
+            stil_str = $sformatf({"   //take jtag fsm into update_dr state\n",
+                                  "   V { TCK = P; TDI = 0; TMS = 1; TRST = 0; TDO = X;}\n" });
+            $fdisplay(stil_fd,stil_str);
+         end        
          //take jtag fsm into run_test_idle state
          @jtag_vi.master_mp.posedge_cb;
          jtag_vi.master_mp.posedge_cb.tms <= 0;
          fsm_nstate = "take jtag fsm into run_test_idle state ";
          `uvm_info( "jtag_driver", { fsm_nstate }, UVM_DEBUG );
 
+         if(gen_stil_file == `ON)begin
+            stil_str = $sformatf({"   //take jtag fsm into run_test_idle state\n",
+                                  "   V { TCK = P; TDI = 0; TMS = 0; TRST = 0; TDO = X;}\n",
+                                  "   V { TCK = P; TDI = 0; TMS = 0; TRST = 0; TDO = X;}\n",
+                                  "   V { TCK = P; TDI = 0; TMS = 0; TRST = 0; TDO = X;}\n"});
+            $fdisplay(stil_fd,stil_str);
+         end        
          repeat (2) @jtag_vi.master_mp.posedge_cb;
 	     seq_item_port.item_done();
 
-                               "}\n"});
+                               //STOP HERE"}\n"});
       end
    endtask: run_phase
 endclass: jtag_driver
@@ -521,7 +606,9 @@ class ieee_1149_1_reg_adapter extends uvm_reg_adapter;
           jtag_tx.o_dr[i] = rw.data[`MAX_DR_WIDTH + i];
       end
       
-      {jtag_tx.chk_dr_tdo,jtag_tx.chk_ir_tdo,jtag_tx.gen_stil} = rw.data[`MAX_DR_WIDTH+jtag_tx.o_dr_length+2:`MAX_DR_WIDTH+jtag_tx.o_dr_length];
+      $display("rw.data=%0h",rw.data);
+      {jtag_tx.chk_dr_tdo,jtag_tx.chk_ir_tdo,jtag_tx.gen_stil} = rw.data>>`MAX_DR_WIDTH+jtag_tx.o_dr_length;
+      $display("rw.data=%0h",rw.data);
 
       for( int i = 0; i < `IR_WIDTH; i++) begin
          jtag_tx.exp_tdo_ir_queue = {jtag_tx.exp_tdo_ir_queue,rw.data[`MAX_DR_WIDTH+jtag_tx.o_dr_length+3+i]};

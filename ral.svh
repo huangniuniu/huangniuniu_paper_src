@@ -58,6 +58,11 @@ class ieee1149_idcode_reg extends uvm_reg;
 
         uvm_reg_field dr_length;
    rand uvm_reg_field idcode;
+        uvm_reg_field gen_stil;
+        uvm_reg_field chk_ir_tdo;
+        uvm_reg_field exp_ir_value;
+        uvm_reg_field chk_dr_tdo;
+        uvm_reg_field exp_dr_value;
 
    function new( string name = "ieee1149_idcode_reg" );
       super.new( .name( name ), .n_bits( `MAX_DR_WIDTH + `IDCODE_LENGTH + 3 +`IR_WIDTH + `IDCODE_LENGTH ), .has_coverage( UVM_NO_COVERAGE ) );
