@@ -18,7 +18,7 @@ class jtag_transaction extends uvm_sequence_item;
     bit                              tdi_dr_queue[$];
     bit                              tdi_ir_queue[$];
   
-    bit                              gen_stil;
+    //bit                              gen_stil;
     bit                              chk_ir_tdo;
     bit                              chk_dr_tdo;
     bit                              exp_tdo_dr_queue[$];
@@ -68,7 +68,7 @@ class jtag_transaction extends uvm_sequence_item;
             $sformat(s, "%s%0h",s,hex_value);
         end
         
-        $sformat(s, "%s\n gen_stil = \t%d\n chk_ir_tdo = \t%d\n chk_dr_tdo = \t%d\n",s, gen_stil, chk_ir_tdo, chk_dr_tdo);
+        $sformat(s, "%s\n chk_ir_tdo = \t%d\n chk_dr_tdo = \t%d\n",s,  chk_ir_tdo, chk_dr_tdo);
         $sformat(s, "%s\n ////////////////////////////////////////////////////////////\n",s);
         return s;
     endfunction: convert2string
@@ -115,15 +115,16 @@ endclass:jtag_transaction
 // class:bus_reg_ext 
 //------------------------------------------------------------------------------
 //This class is used to send information from a sequence to the adapter
-//STOP HERE
 class bus_reg_ext extends uvm_object;
-  `uvm_object_utils(bus_reg_ext)
-
-  string info = "empty";
-  
-  function new(string name = "bus_reg_ext");
-    super.new(name);
-  endfunction : new
+   `uvm_object_utils(bus_reg_ext)
+   bit    chk_ir_tdo; 
+   bit    chk_dr_tdo; 
+   bit    exp_tdo_dr[];
+   bit    exp_tdo_ir[];
+   
+   function new(string name = "bus_reg_ext");
+     super.new(name);
+   endfunction : new
     
 endclass : bus_reg_ext
 //------------------------------------------------------------------------------
@@ -597,7 +598,30 @@ class ieee_1149_1_reg_adapter extends uvm_reg_adapter;
    endfunction: new
 
    virtual function uvm_sequence_item reg2bus( const ref uvm_reg_bus_op rw );
-      jtag_transaction  jtag_tx = jtag_transaction::type_id::create("jtag_tx");
+      bit                     gen_stil_file; 
+      jtag_configuration      jtag_cfg;
+      bus_reg_ext             extension;
+      uvm_reg_item            item = get_item();
+      jtag_transaction        jtag_tx = jtag_transaction::type_id::create("jtag_tx");
+
+      jtag_cfg = jtag_configuration::type_id::create( .name( "jtag_cfg" ) );
+      assert(uvm_config_db#(jtag_configuration)::get ( .cntxt( this ), .inst_name( "*" ), .field_name( "jtag_cfg" ), .value( jtag_cfg) ));
+      gen_stil_file = jtag_cfg.gen_stil_file;
+      
+      if(!$cast(extension,item.extension))
+         `uvm_error("reg2bus", "Extension casting failed.");
+
+      if((extension != null) && (gen_stil_file == `ON)) begin
+         jtag_tx.chk_ir_tdo = extension.chk_ir_tdo;
+         jtag_tx.chk_dr_tdo = extension.chk_dr_tdo;
+
+         foreach(extension.exp_tdo_ir[i])
+            jtag_tx.exp_tdo_ir_queue = {jtag_tx.exp_tdo_ir_queue,extension.exp_tdo_ir[i]};
+         
+         foreach(extension.exp_tdo_dr[i])
+            jtag_tx.exp_tdo_dr_queue = {jtag_tx.exp_tdo_dr_queue,extension.exp_tdo_dr[i]};
+      end
+
       jtag_tx.protocol = IEEE_1149_1;
       jtag_tx.o_ir = rw.addr;
       jtag_tx.o_dr_length = rw.data[`MAX_DR_WIDTH-1 : 0];
@@ -606,17 +630,6 @@ class ieee_1149_1_reg_adapter extends uvm_reg_adapter;
           jtag_tx.o_dr[i] = rw.data[`MAX_DR_WIDTH + i];
       end
       
-      $display("rw.data=%0h",rw.data);
-      {jtag_tx.chk_dr_tdo,jtag_tx.chk_ir_tdo,jtag_tx.gen_stil} = rw.data>>`MAX_DR_WIDTH+jtag_tx.o_dr_length;
-      $display("rw.data=%0h",rw.data);
-
-      for( int i = 0; i < `IR_WIDTH; i++) begin
-         jtag_tx.exp_tdo_ir_queue = {jtag_tx.exp_tdo_ir_queue,rw.data[`MAX_DR_WIDTH+jtag_tx.o_dr_length+3+i]};
-      end
-
-      for( int i = 0; i < jtag_tx.o_dr_length; i++) begin
-         jtag_tx.exp_tdo_dr_queue = {jtag_tx.exp_tdo_dr_queue,rw.data[`MAX_DR_WIDTH+jtag_tx.o_dr_length+3+`IR_WIDTH+i]};
-      end
       return jtag_tx;
    endfunction: reg2bus
 

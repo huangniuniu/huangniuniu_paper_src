@@ -65,7 +65,7 @@ class ieee1149_idcode_reg extends uvm_reg;
         uvm_reg_field exp_dr_value;
 
    function new( string name = "ieee1149_idcode_reg" );
-      super.new( .name( name ), .n_bits( `MAX_DR_WIDTH + `IDCODE_LENGTH + 3 +`IR_WIDTH + `IDCODE_LENGTH ), .has_coverage( UVM_NO_COVERAGE ) );
+      super.new( .name( name ), .n_bits( `MAX_DR_WIDTH + `IDCODE_LENGTH ), .has_coverage( UVM_NO_COVERAGE ) );
    endfunction: new
 
    virtual function void build();
@@ -90,7 +90,7 @@ class ieee1149_idcode_reg extends uvm_reg;
                        .has_reset              ( 1    ), 
                        .is_rand                ( 1    ), 
                        .individually_accessible( 0   ) );
-
+/*
       gen_stil = uvm_reg_field::type_id::create( "gen_stil" );
       gen_stil.configure( .parent                 ( this ), 
                        .size                   ( 1), 
@@ -146,7 +146,7 @@ class ieee1149_idcode_reg extends uvm_reg;
                        .is_rand                ( 0    ), 
                        .individually_accessible( 0   ) );
 
-
+*/
 
 
 

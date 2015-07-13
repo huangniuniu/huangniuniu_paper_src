@@ -35,20 +35,25 @@ class jtag_wr_sequence extends uvm_reg_sequence;
       ieee1149_1_reg_block       jtag_reg_block;
       uvm_status_e               status;
       //uvm_reg_data_t             value;
-      bit [`IDCODE_LENGTH-1:0]   idcode,exp_dr_value;
+      bit [`IDCODE_LENGTH-1:0]   idcode,exp_tdo_dr;
       bit [`MAX_DR_WIDTH-1:0]    dr_length;
-      bit [`IR_WIDTH-1:0]        exp_ir_value;
-      bit                        gen_stil,chk_ir_tdo,chk_dr_tdo;
+      bit [`IR_WIDTH-1:0]        exp_tdo_ir;
+      bit                        chk_ir_tdo,chk_dr_tdo;
+      bus_reg_ext                bus_reg_extension;
+
+      bus_reg_extension = bus_reg_ext::type_id::create(.name("bus_reg_extension"));
 
       $cast( jtag_reg_block, model );
       dr_length = `IDCODE_LENGTH;
       idcode = `IDCODE_LENGTH'h55;
-      gen_stil = 1;
-      chk_ir_tdo = 1;
-      chk_dr_tdo = 1;
-      exp_ir_value = `IDCODE_OPCODE;
-      exp_dr_value = `IDCODE_RST_VALUE;
-      write_reg( jtag_reg_block.idcode_reg, status, { exp_dr_value,exp_ir_value,chk_dr_tdo,chk_ir_tdo,gen_stil,idcode, dr_length } );
+      bus_reg_extension.chk_ir_tdo = 1;
+      bus_reg_extension.chk_dr_tdo = 1;
+      bus_reg_extension.exp_tdo_ir = new[`IR_WIDTH]; 
+      bus_reg_extension.exp_tdo_dr = new[`IDCODE_LENGTH]; 
+      bus_reg_extension.exp_tdo_ir = `IDCODE_OPCODE;
+      bus_reg_extension.exp_tdo_dr = `IDCODE_RST_VALUE;
+      
+      write_reg( .uvm_reg(jtag_reg_block.idcode_reg), .uvm_status_e(status), .uvm_reg_data_t({ idcode, dr_length }), .uvm_object(bus_reg_extension) );
   endtask: body
 endclass: jtag_wr_sequence
 
