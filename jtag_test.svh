@@ -69,7 +69,19 @@ class jtag_1149_1_test extends jtag_base_test;
       jtag_reg_seq.start( .sequencer( env.agent.sqr ) );
       
       phase.drop_objection( .obj( this ), .description( "end of test" ));
-     endtask: main_phase
+   endtask: main_phase
+
+   function void report_phase(uvm_phase phase);
+      string            stil_str;
+      int               stil_fd;
+      phase.raise_objection( .obj( this ), .description( "start of report_phase" ));
+      if(jtag_cfg.gen_stil_file == `ON) begin
+         stil_fd = $fopen("jtag_1149_1_test.stil", "a");
+         stil_str = $sformatf("}\n");
+         $fdisplay(stil_fd,stil_str);
+      end
+      phase.drop_objection( .obj( this ), .description( "end of report_phase" ));
+   endfunction: report_phase
 endclass: jtag_1149_1_test
 
 //---------------------------------------------------------------------------

@@ -598,20 +598,15 @@ class ieee_1149_1_reg_adapter extends uvm_reg_adapter;
    endfunction: new
 
    virtual function uvm_sequence_item reg2bus( const ref uvm_reg_bus_op rw );
-      bit                     gen_stil_file; 
-      jtag_configuration      jtag_cfg;
       bus_reg_ext             extension;
       uvm_reg_item            item = get_item();
       jtag_transaction        jtag_tx = jtag_transaction::type_id::create("jtag_tx");
 
-      jtag_cfg = jtag_configuration::type_id::create( .name( "jtag_cfg" ) );
-      assert(uvm_config_db#(jtag_configuration)::get ( .cntxt( this ), .inst_name( "*" ), .field_name( "jtag_cfg" ), .value( jtag_cfg) ));
-      gen_stil_file = jtag_cfg.gen_stil_file;
       
       if(!$cast(extension,item.extension))
          `uvm_error("reg2bus", "Extension casting failed.");
 
-      if((extension != null) && (gen_stil_file == `ON)) begin
+      if( extension != null ) begin
          jtag_tx.chk_ir_tdo = extension.chk_ir_tdo;
          jtag_tx.chk_dr_tdo = extension.chk_dr_tdo;
 

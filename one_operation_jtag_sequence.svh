@@ -50,10 +50,20 @@ class jtag_wr_sequence extends uvm_reg_sequence;
       bus_reg_extension.chk_dr_tdo = 1;
       bus_reg_extension.exp_tdo_ir = new[`IR_WIDTH]; 
       bus_reg_extension.exp_tdo_dr = new[`IDCODE_LENGTH]; 
-      bus_reg_extension.exp_tdo_ir = `IDCODE_OPCODE;
-      bus_reg_extension.exp_tdo_dr = `IDCODE_RST_VALUE;
-      
-      write_reg( .uvm_reg(jtag_reg_block.idcode_reg), .uvm_status_e(status), .uvm_reg_data_t({ idcode, dr_length }), .uvm_object(bus_reg_extension) );
+      exp_tdo_ir = `IDCODE_OPCODE;
+      exp_tdo_dr = `IDCODE_RST_VALUE;
+
+      foreach(bus_reg_extension.exp_tdo_ir[i]) begin
+         bus_reg_extension.exp_tdo_ir[i] = exp_tdo_ir[0];
+         exp_tdo_ir = exp_tdo_ir >> 1;
+      end
+
+      foreach(bus_reg_extension.exp_tdo_dr[i]) begin
+         bus_reg_extension.exp_tdo_dr[i] = exp_tdo_dr[0];
+         exp_tdo_dr = exp_tdo_dr >> 1;
+      end
+
+      write_reg( jtag_reg_block.idcode_reg, status, { idcode, dr_length }, .extension(bus_reg_extension) );
   endtask: body
 endclass: jtag_wr_sequence
 
