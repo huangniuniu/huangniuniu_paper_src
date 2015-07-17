@@ -1,5 +1,9 @@
 //------------------------------------------------------------------------------
 //TDR definition
+`define SCANCONFIG_OPCODE         `IR_WIDTH'h24
+`define SCANCONFIG_LENGTH         14
+`define SCANCONFIG_RST_VALUE      `SCANCONFIG_LENGTH'h6c
+
 `define IDCODE_OPCODE         `IR_WIDTH'hfc
 `define IDCODE_LENGTH         8
 `define IDCODE_RST_VALUE      `IDCODE_LENGTH'h6c
@@ -156,15 +160,61 @@ class ieee1149_idcode_reg extends uvm_reg;
 endclass: ieee1149_idcode_reg
 
 //------------------------------------------------------------------------------
+// Class: ieee1149_scanconfig_reg
+//------------------------------------------------------------------------------
+
+class ieee1149_scanconfig_reg extends uvm_reg;
+   `uvm_object_utils( ieee1149_scanconfig_reg )
+
+        uvm_reg_field dr_length;
+   rand uvm_reg_field scanconfig;
+        uvm_reg_field gen_stil;
+        uvm_reg_field chk_ir_tdo;
+        uvm_reg_field exp_ir_value;
+        uvm_reg_field chk_dr_tdo;
+        uvm_reg_field exp_dr_value;
+
+   function new( string name = "ieee1149_scanconfig_reg" );
+      super.new( .name( name ), .n_bits( `MAX_DR_WIDTH + `SCANCONFIG_LENGTH ), .has_coverage( UVM_NO_COVERAGE ) );
+   endfunction: new
+
+   virtual function void build();
+      dr_length = uvm_reg_field::type_id::create( "dr_length" );
+      dr_length.configure( .parent                 ( this ), 
+                        .size                   ( `MAX_DR_WIDTH    ), 
+                        .lsb_pos                ( 0    ), 
+                        .access                 ( "RW" ), 
+                        .volatile               ( 0    ),
+                        .reset                  ( 0    ), 
+                        .has_reset              ( 0    ), 
+                        .is_rand                ( 0    ), 
+                        .individually_accessible( 0    ) );
+
+      scanconfig = uvm_reg_field::type_id::create( "scanconfig" );
+      scanconfig.configure( .parent                 ( this ), 
+                       .size                   ( `SCANCONFIG_LENGTH), 
+                       .lsb_pos                ( `MAX_DR_WIDTH    ), 
+                       .access                 ( "RW" ), 
+                       .volatile               ( 0    ),
+                       .reset                  ( `SCANCONFIG_RST_VALUE), 
+                       .has_reset              ( 1    ), 
+                       .is_rand                ( 1    ), 
+                       .individually_accessible( 0   ) );
+   endfunction: build
+endclass: ieee1149_scanconfig_reg
+
+
+//------------------------------------------------------------------------------
 // Class: ieee1149_1_reg_block
 //------------------------------------------------------------------------------
 
 class ieee1149_1_reg_block extends uvm_reg_block;
    `uvm_object_utils( ieee1149_1_reg_block )
 
-   rand ieee1149_bypass_reg   bypass_reg;
-   rand ieee1149_idcode_reg   idcode_reg;
-   uvm_reg_map                reg_map;
+   rand ieee1149_bypass_reg            bypass_reg;
+   rand ieee1149_idcode_reg            idcode_reg;
+   rand ieee1149_scanconfig_reg        scanconfig_reg;
+   uvm_reg_map                         reg_map;
 
    function new( string name = "ieee1149_1_reg_block" );
       super.new( .name( name ), .has_coverage( UVM_NO_COVERAGE ) );
@@ -179,10 +229,15 @@ class ieee1149_1_reg_block extends uvm_reg_block;
       idcode_reg.configure( .blk_parent( this ) );
       idcode_reg.build();
 
+      scanconfig_reg = ieee1149_scanconfig_reg::type_id::create( "scanconfig_reg" );
+      scanconfig_reg.configure( .blk_parent( this ) );
+      scanconfig_reg.build();
+
       reg_map = create_map( .name( "reg_map" ), .base_addr( `IR_WIDTH'h00 ), 
                             .n_bytes( `MAX_N_BYTES ), .endian( UVM_LITTLE_ENDIAN ) );
       reg_map.add_reg( .rg( bypass_reg ), .offset( `BYPASS_OPCODE), .rights( "RW" ) );
       reg_map.add_reg( .rg( idcode_reg  ), .offset( `IDCODE_OPCODE ), .rights( "RW" ) );
+      reg_map.add_reg( .rg( scanconfig_reg), .offset( `SCANCONFIG_OPCODE), .rights( "RW" ) );
       lock_model(); // finalize the address mapping
    endfunction: build
 

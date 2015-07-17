@@ -48,6 +48,8 @@ class jtag_1149_1_test extends jtag_base_test;
    
    function new( string name, uvm_component parent );
       super.new( name, parent );
+      //factory.set_type_override_by_name("jtag_driver","jtag_driver_atpg","*");
+      jtag_driver::type_id::set_type_override(jtag_driver_atpg::get_type(),1);
    endfunction: new
    
    function void build_phase( uvm_phase phase);
@@ -60,11 +62,11 @@ class jtag_1149_1_test extends jtag_base_test;
    endfunction: build_phase
 
    task main_phase( uvm_phase phase);
-      jtag_wr_sequence      jtag_reg_seq;
+      atpg_try_sequence    jtag_reg_seq;
       
       phase.raise_objection( .obj( this ), .description( "start of test" ));
 
-      jtag_reg_seq = jtag_wr_sequence::type_id::create( "jtag_reg_seq" );
+      jtag_reg_seq = atpg_try_sequence::type_id::create( "jtag_reg_seq" );
       jtag_reg_seq.model = jtag_reg_block;
       jtag_reg_seq.start( .sequencer( env.agent.sqr ) );
       
