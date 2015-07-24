@@ -114,4 +114,53 @@ class jtag_wr_sequence extends uvm_reg_sequence;
       write_reg( jtag_reg_block.idcode_reg, status, { idcode, dr_length }, .extension(bus_reg_extension) );
   endtask: body
 endclass: jtag_wr_sequence
+//---------------------------------------------------------------------------
+// Class: ro_en_all_sequence
+//---------------------------------------------------------------------------
+   
+class ro_en_all_sequence extends uvm_reg_sequence;
+   `uvm_object_utils( ro_en_all_sequence )
+
+   function new( string name = "" );
+      super.new( name );
+   endfunction: new
+
+   task body();
+      ieee1149_1_reg_block       jtag_reg_block;
+      ieee1500_reg_block         p1500_reg_block;
+      uvm_status_e               status;
+      //uvm_reg_data_t             value;
+      bit [`VDCI_P1500_SETUP_LENGTH-1:0]           vdci_p1500_setup; 
+      bit [`ROSEN_LENGTH-1:0]                      rosen; 
+      bit [`PFH_COMMON_ROS_STATUS_LENGTH-1:0]      pfh_common_ros_status;
+      bit [`PFH_COMMON_ROS_SETUP_LENGTH-1:0]       pfh_common_ros_setup;
+      bit [`ROSSETUP_LENGTH-1:0]                   rossetup;
+      bit [`MAX_DR_WIDTH-1:0]                      dr_length;
+      bus_reg_ext                                  bus_reg_extension;
+
+      bus_reg_extension = bus_reg_ext::type_id::create(.name("bus_reg_extension"));
+
+      $cast( jtag_reg_block, model );
+      dr_length = `IDCODE_LENGTH;
+      idcode = `IDCODE_LENGTH'h55;
+      bus_reg_extension.chk_ir_tdo = 1;
+      bus_reg_extension.chk_dr_tdo = 1;
+      bus_reg_extension.exp_tdo_ir = new[`IR_WIDTH]; 
+      bus_reg_extension.exp_tdo_dr = new[`IDCODE_LENGTH]; 
+      exp_tdo_ir = `IDCODE_OPCODE;
+      exp_tdo_dr = `IDCODE_RST_VALUE;
+
+      foreach(bus_reg_extension.exp_tdo_ir[i]) begin
+         bus_reg_extension.exp_tdo_ir[i] = exp_tdo_ir[0];
+         exp_tdo_ir = exp_tdo_ir >> 1;
+      end
+
+      foreach(bus_reg_extension.exp_tdo_dr[i]) begin
+         bus_reg_extension.exp_tdo_dr[i] = exp_tdo_dr[0];
+         exp_tdo_dr = exp_tdo_dr >> 1;
+      end
+
+      write_reg( jtag_reg_block.idcode_reg, status, { idcode, dr_length }, .extension(bus_reg_extension) );
+  endtask: body
+endclass: ro_en_all_sequence
 

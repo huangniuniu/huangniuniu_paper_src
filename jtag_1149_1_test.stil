@@ -1,0 +1,252 @@
+STIL1.0
+Header{
+  (Title jtag_1149_1_test.stil )
+}
+
+Signals { 
+  BP_TDO      Out;
+  BP_TCK       In;
+  BP_TRST_L      In;
+  BP_TDI       In;
+  BP_TMS       In;
+}
+
+Timing "BP_TCK_DOMAIN"{
+  WaveformTable base {
+     Period'         40';
+       Waveforms {
+          BP_TCK  { 0P { '0ns' D; '         20ns' D/U; '         30ns' D; }}
+          BP_TDI  { 01 { '0ns' D; }}
+          BP_TMS  { 01 { '0ns' D; }}
+          BP_TRST_L { 01 { '0ns' D; }}
+          BP_TDO  { LHX { '0ns' Z; '         15ns' L/H/X;}}
+       }
+  }//WaveformTable
+}//Timing
+
+PatternBurst "jtag_1149_1_test.stil" {
+    PatList { " test_sequence"; }
+    }
+}
+
+PatternExec {
+    Timing  " TCK_DOMAIN";
+    PatternBurst " jtag_1149_1_test.stil";
+}
+
+Pattern test_sequence {
+   //Reset DUT 
+   V { BP_TCK = 0; BP_TDI = 0; BP_TMS = 1; BP_TRST_L = 0; BP_TDO = X;}
+   V { BP_TCK = 0; BP_TDI = 0; BP_TMS = 1; BP_TRST_L = 0; BP_TDO = X;}
+   V { BP_TCK = 0; BP_TDI = 0; BP_TMS = 1; BP_TRST_L = 0; BP_TDO = X;}
+   V { BP_TCK = 0; BP_TDI = 0; BP_TMS = 1; BP_TRST_L = 0; BP_TDO = X;}
+   V { BP_TCK = 0; BP_TDI = 0; BP_TMS = 1; BP_TRST_L = 0; BP_TDO = X;}
+   V { BP_TCK = 0; BP_TDI = 0; BP_TMS = 1; BP_TRST_L = 0; BP_TDO = X;}
+   V { BP_TCK = 0; BP_TDI = 0; BP_TMS = 1; BP_TRST_L = 0; BP_TDO = X;}
+   V { BP_TCK = 0; BP_TDI = 0; BP_TMS = 1; BP_TRST_L = 1; BP_TDO = X;}
+   //Out of reset DUT 
+
+   //take jtag fsm into run_test_idle state
+   V { BP_TCK = P; BP_TDI = 0; BP_TMS = 0; BP_TRST_L = 1; BP_TDO = X;}
+
+   //take jtag fsm into select_dr_scan state
+   V { BP_TCK = P; BP_TDI = 0; BP_TMS = 1; BP_TRST_L = 1; BP_TDO = X;}
+
+   //take jtag fsm into select_ir_scan state
+   V { BP_TCK = P; BP_TDI = 0; BP_TMS = 1; BP_TRST_L = 1; BP_TDO = X;}
+
+   //take jtag fsm into capture_ir state
+   V { BP_TCK = P; BP_TDI = 0; BP_TMS = 0; BP_TRST_L = 1; BP_TDO = X;}
+
+   //take jtag fsm into shift_ir state
+   V { BP_TCK = P; BP_TDI = 0; BP_TMS = 0; BP_TRST_L = 1; BP_TDO = X;}
+
+   //take jtag fsm into shift_ir state
+   V { BP_TCK = P; BP_TDI = 0; BP_TMS = 0; BP_TRST_L = 1; BP_TDO = X;}
+
+   //take jtag fsm into shift_ir state
+   V { BP_TCK = P; BP_TDI = 0; BP_TMS = 0; BP_TRST_L = 1; BP_TDO = X;}
+
+   //take jtag fsm into shift_ir state
+   V { BP_TCK = P; BP_TDI = 1; BP_TMS = 0; BP_TRST_L = 1; BP_TDO = X;}
+
+   //take jtag fsm into shift_ir state
+   V { BP_TCK = P; BP_TDI = 0; BP_TMS = 0; BP_TRST_L = 1; BP_TDO = X;}
+
+   //take jtag fsm into shift_ir state
+   V { BP_TCK = P; BP_TDI = 0; BP_TMS = 0; BP_TRST_L = 1; BP_TDO = X;}
+
+   //take jtag fsm into shift_ir state
+   V { BP_TCK = P; BP_TDI = 1; BP_TMS = 0; BP_TRST_L = 1; BP_TDO = X;}
+
+   //take jtag fsm into shift_ir state
+   V { BP_TCK = P; BP_TDI = 0; BP_TMS = 0; BP_TRST_L = 1; BP_TDO = X;}
+
+   //take jtag fsm into exit1_ir state
+   V { BP_TCK = P; BP_TDI = 0; BP_TMS = 1; BP_TRST_L = 1; BP_TDO = X;}
+
+   //take jtag fsm into update_ir state
+   V { BP_TCK = P; BP_TDI = 0; BP_TMS = 1; BP_TRST_L = 1; BP_TDO = X;}
+
+   //take jtag fsm into select_dr_scan state
+   V { BP_TCK = P; BP_TDI = 0; BP_TMS = 1; BP_TRST_L = 1; BP_TDO = X;}
+
+   //take jtag fsm into capture_dr state
+   V { BP_TCK = P; BP_TDI = 0; BP_TMS = 0; BP_TRST_L = 1; BP_TDO = X;}
+
+   //take jtag fsm into shift_dr state
+   V { BP_TCK = P; BP_TDI = 0; BP_TMS = 0; BP_TRST_L = 1; BP_TDO = X;}
+
+   //take jtag fsm into shift_dr state
+   V { BP_TCK = P; BP_TDI = 0; BP_TMS = 0; BP_TRST_L = 1; BP_TDO = X;}
+
+   //take jtag fsm into shift_dr state
+   V { BP_TCK = P; BP_TDI = 1; BP_TMS = 0; BP_TRST_L = 1; BP_TDO = X;}
+
+   //take jtag fsm into shift_dr state
+   V { BP_TCK = P; BP_TDI = 0; BP_TMS = 0; BP_TRST_L = 1; BP_TDO = X;}
+
+   //take jtag fsm into shift_dr state
+   V { BP_TCK = P; BP_TDI = 0; BP_TMS = 0; BP_TRST_L = 1; BP_TDO = X;}
+
+   //take jtag fsm into shift_dr state
+   V { BP_TCK = P; BP_TDI = 0; BP_TMS = 0; BP_TRST_L = 1; BP_TDO = X;}
+
+   //take jtag fsm into shift_dr state
+   V { BP_TCK = P; BP_TDI = 0; BP_TMS = 0; BP_TRST_L = 1; BP_TDO = X;}
+
+   //take jtag fsm into shift_dr state
+   V { BP_TCK = P; BP_TDI = 0; BP_TMS = 0; BP_TRST_L = 1; BP_TDO = X;}
+
+   //take jtag fsm into shift_dr state
+   V { BP_TCK = P; BP_TDI = 0; BP_TMS = 0; BP_TRST_L = 1; BP_TDO = X;}
+
+   //take jtag fsm into shift_dr state
+   V { BP_TCK = P; BP_TDI = 1; BP_TMS = 0; BP_TRST_L = 1; BP_TDO = X;}
+
+   //take jtag fsm into shift_dr state
+   V { BP_TCK = P; BP_TDI = 1; BP_TMS = 0; BP_TRST_L = 1; BP_TDO = X;}
+
+   //take jtag fsm into shift_dr state
+   V { BP_TCK = P; BP_TDI = 0; BP_TMS = 0; BP_TRST_L = 1; BP_TDO = X;}
+
+   //take jtag fsm into shift_dr state
+   V { BP_TCK = P; BP_TDI = 0; BP_TMS = 0; BP_TRST_L = 1; BP_TDO = X;}
+
+   //take jtag fsm into shift_dr state
+   V { BP_TCK = P; BP_TDI = 0; BP_TMS = 0; BP_TRST_L = 1; BP_TDO = X;}
+
+   //take jtag fsm into exit1_dr state
+   V { BP_TCK = P; BP_TDI = 0; BP_TMS = 1; BP_TRST_L = 1; BP_TDO = X;}
+
+   //take jtag fsm into update_dr state
+   V { BP_TCK = P; BP_TDI = 0; BP_TMS = 1; BP_TRST_L = 1; BP_TDO = X;}
+
+   //take jtag fsm into run_test_idle state
+   V { BP_TCK = P; BP_TDI = 0; BP_TMS = 0; BP_TRST_L = 1; BP_TDO = X;}
+   V { BP_TCK = P; BP_TDI = 0; BP_TMS = 0; BP_TRST_L = 1; BP_TDO = X;}
+   V { BP_TCK = P; BP_TDI = 0; BP_TMS = 0; BP_TRST_L = 1; BP_TDO = X;}
+
+   //take jtag fsm into run_test_idle state
+   V { BP_TCK = P; BP_TDI = 0; BP_TMS = 0; BP_TRST_L = 1; BP_TDO = X;}
+
+   //take jtag fsm into select_dr_scan state
+   V { BP_TCK = P; BP_TDI = 0; BP_TMS = 1; BP_TRST_L = 1; BP_TDO = X;}
+
+   //take jtag fsm into select_ir_scan state
+   V { BP_TCK = P; BP_TDI = 0; BP_TMS = 1; BP_TRST_L = 1; BP_TDO = X;}
+
+   //take jtag fsm into capture_ir state
+   V { BP_TCK = P; BP_TDI = 0; BP_TMS = 0; BP_TRST_L = 1; BP_TDO = X;}
+
+   //take jtag fsm into shift_ir state
+   V { BP_TCK = P; BP_TDI = 0; BP_TMS = 0; BP_TRST_L = 1; BP_TDO = X;}
+
+   //take jtag fsm into shift_ir state
+   V { BP_TCK = P; BP_TDI = 0; BP_TMS = 0; BP_TRST_L = 1; BP_TDO = L;}
+
+   //take jtag fsm into shift_ir state
+   V { BP_TCK = P; BP_TDI = 0; BP_TMS = 0; BP_TRST_L = 1; BP_TDO = L;}
+
+   //take jtag fsm into shift_ir state
+   V { BP_TCK = P; BP_TDI = 1; BP_TMS = 0; BP_TRST_L = 1; BP_TDO = H;}
+
+   //take jtag fsm into shift_ir state
+   V { BP_TCK = P; BP_TDI = 0; BP_TMS = 0; BP_TRST_L = 1; BP_TDO = L;}
+
+   //take jtag fsm into shift_ir state
+   V { BP_TCK = P; BP_TDI = 0; BP_TMS = 0; BP_TRST_L = 1; BP_TDO = L;}
+
+   //take jtag fsm into shift_ir state
+   V { BP_TCK = P; BP_TDI = 1; BP_TMS = 0; BP_TRST_L = 1; BP_TDO = H;}
+
+   //take jtag fsm into shift_ir state
+   V { BP_TCK = P; BP_TDI = 0; BP_TMS = 0; BP_TRST_L = 1; BP_TDO = L;}
+
+   //take jtag fsm into exit1_ir state
+   V { BP_TCK = P; BP_TDI = 0; BP_TMS = 1; BP_TRST_L = 1; BP_TDO = L;}
+
+   //take jtag fsm into update_ir state
+   V { BP_TCK = P; BP_TDI = 0; BP_TMS = 1; BP_TRST_L = 1; BP_TDO = X;}
+
+   //take jtag fsm into select_dr_scan state
+   V { BP_TCK = P; BP_TDI = 0; BP_TMS = 1; BP_TRST_L = 1; BP_TDO = X;}
+
+   //take jtag fsm into capture_dr state
+   V { BP_TCK = P; BP_TDI = 0; BP_TMS = 0; BP_TRST_L = 1; BP_TDO = X;}
+
+   //take jtag fsm into shift_dr state
+   V { BP_TCK = P; BP_TDI = 0; BP_TMS = 0; BP_TRST_L = 1; BP_TDO = X;}
+
+   //take jtag fsm into shift_dr state
+   V { BP_TCK = P; BP_TDI = 0; BP_TMS = 0; BP_TRST_L = 1; BP_TDO = L;}
+
+   //take jtag fsm into shift_dr state
+   V { BP_TCK = P; BP_TDI = 1; BP_TMS = 0; BP_TRST_L = 1; BP_TDO = H;}
+
+   //take jtag fsm into shift_dr state
+   V { BP_TCK = P; BP_TDI = 0; BP_TMS = 0; BP_TRST_L = 1; BP_TDO = L;}
+
+   //take jtag fsm into shift_dr state
+   V { BP_TCK = P; BP_TDI = 0; BP_TMS = 0; BP_TRST_L = 1; BP_TDO = L;}
+
+   //take jtag fsm into shift_dr state
+   V { BP_TCK = P; BP_TDI = 0; BP_TMS = 0; BP_TRST_L = 1; BP_TDO = L;}
+
+   //take jtag fsm into shift_dr state
+   V { BP_TCK = P; BP_TDI = 0; BP_TMS = 0; BP_TRST_L = 1; BP_TDO = L;}
+
+   //take jtag fsm into shift_dr state
+   V { BP_TCK = P; BP_TDI = 0; BP_TMS = 0; BP_TRST_L = 1; BP_TDO = L;}
+
+   //take jtag fsm into shift_dr state
+   V { BP_TCK = P; BP_TDI = 0; BP_TMS = 0; BP_TRST_L = 1; BP_TDO = L;}
+
+   //take jtag fsm into shift_dr state
+   V { BP_TCK = P; BP_TDI = 1; BP_TMS = 0; BP_TRST_L = 1; BP_TDO = H;}
+
+   //take jtag fsm into shift_dr state
+   V { BP_TCK = P; BP_TDI = 1; BP_TMS = 0; BP_TRST_L = 1; BP_TDO = H;}
+
+   //take jtag fsm into shift_dr state
+   V { BP_TCK = P; BP_TDI = 0; BP_TMS = 0; BP_TRST_L = 1; BP_TDO = L;}
+
+   //take jtag fsm into shift_dr state
+   V { BP_TCK = P; BP_TDI = 0; BP_TMS = 0; BP_TRST_L = 1; BP_TDO = L;}
+
+   //take jtag fsm into shift_dr state
+   V { BP_TCK = P; BP_TDI = 0; BP_TMS = 0; BP_TRST_L = 1; BP_TDO = L;}
+
+   //take jtag fsm into exit1_dr state
+   V { BP_TCK = P; BP_TDI = 0; BP_TMS = 1; BP_TRST_L = 1; BP_TDO = L;}
+
+   //take jtag fsm into update_dr state
+   V { BP_TCK = P; BP_TDI = 0; BP_TMS = 1; BP_TRST_L = 1; BP_TDO = X;}
+
+   //take jtag fsm into run_test_idle state
+   V { BP_TCK = P; BP_TDI = 0; BP_TMS = 0; BP_TRST_L = 1; BP_TDO = X;}
+   V { BP_TCK = P; BP_TDI = 0; BP_TMS = 0; BP_TRST_L = 1; BP_TDO = X;}
+   V { BP_TCK = P; BP_TDI = 0; BP_TMS = 0; BP_TRST_L = 1; BP_TDO = X;}
+
+}
+

@@ -13,8 +13,13 @@ typedef enum bit[3:0] { TEST_LOGIC_RESET, RUN_TEST_IDLE, SELECT_DR_SCAN, CAPTURE
 `define   ON                  1
 `define   OFF                 1
 `define   IR_WIDTH            8
+`define   IEEE1500_IR_WIDTH   10
 `define   MAX_DR_WIDTH        32
 `define   MAX_N_BYTES         128
+`define   IEEE_1149_1         0
+`define   IEEE_1500           1 
+`define   IEEE_1687           2 
+`define   PROTOCOL_WIDTH      3
 `define   TEST_LOGIC_RESET    4'h0
 `define   RUN_TEST_IDLE       4'h1
 `define   SELECT_DR_SCAN      4'h2

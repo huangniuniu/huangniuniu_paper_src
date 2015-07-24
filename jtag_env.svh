@@ -121,6 +121,7 @@ class bus_reg_ext extends uvm_object;
    bit    chk_dr_tdo; 
    bit    exp_tdo_dr[];
    bit    exp_tdo_ir[];
+   bit    dr_ext[];
    
    function new(string name = "bus_reg_ext");
      super.new(name);
