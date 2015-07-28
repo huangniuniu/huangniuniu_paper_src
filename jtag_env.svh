@@ -7,7 +7,9 @@ class jtag_transaction extends uvm_sequence_item;
     rand  bit [`IR_WIDTH-1:0]        o_ir;
 
     rand  int unsigned               o_dr_length;
+    rand  int unsigned               o_wir_length;
     bit                              o_dr[];
+    bit                              o_wir[];
     //rand  bit [o_dr_length-1:0]      o_dr;
     
    //tdo_dr_queue/tdo_ir_queue  store tdo data
@@ -51,7 +53,7 @@ class jtag_transaction extends uvm_sequence_item;
 
         s = super.convert2string();
         
-        $sformat(s, "%s\n ////////////////////////////////////////////////////////////\n jtag_transaction\n protocol \t%0s\n o_ir \t%8b\n o_dr_length \t%0d\n o_dr \t",s, protocol.name(), o_ir, o_dr_length);
+        $sformat(s, "%s\n ////////////////////////////////////////////////////////////\n jtag_transaction\n protocol \t%0s\n o_ir \t%`IR_WIDTHb\n o_dr_length \t%0d\n o_dr \t",s, protocol.name(), o_ir, o_dr_length);
          
         if (remainder != 0) begin
             if (remainder == 1)
@@ -67,6 +69,29 @@ class jtag_transaction extends uvm_sequence_item;
             hex_value = o_dr[i*4+3] *8 + o_dr[i*4+2] *4 + o_dr[i*4+1] *2 + o_dr[i*4];
             $sformat(s, "%s%0h",s,hex_value);
         end
+        
+        if (protocol = IEEE_1500) begin
+            $sformat(s, "%s\n o_wir_length \t%d\n o_wir \tn",s,  o_wir_length);
+
+            four_bits_num = o_wir_length / 4;
+            remainder = o_wir_length % 4;
+            
+            if (remainder != 0) begin
+                if (remainder == 1)
+                    hex_value = o_dr[four_bits_num*4];
+                else if (remainder == 2)
+                    hex_value = o_dr[four_bits_num*4 + 1] *2 + o_dr[four_bits_num*4];
+                else if (remainder == 3)
+                    hex_value = o_dr[four_bits_num*4 + 2] *4 + o_dr[four_bits_num*4 + 1] *2 + o_dr[four_bits_num*4];
+                $sformat(s, "%s%0h",s,hex_value);
+            end 
+            
+            for ( int i = 0; i < four_bits_num; i++) begin
+                hex_value = o_dr[i*4+3] *8 + o_dr[i*4+2] *4 + o_dr[i*4+1] *2 + o_dr[i*4];
+                $sformat(s, "%s%0h",s,hex_value);
+            end
+ 
+         end//if(protocol = IEEE_1500) 
         
         $sformat(s, "%s\n chk_ir_tdo = \t%d\n chk_dr_tdo = \t%d\n",s,  chk_ir_tdo, chk_dr_tdo);
         $sformat(s, "%s\n ////////////////////////////////////////////////////////////\n",s);
@@ -128,6 +153,25 @@ class bus_reg_ext extends uvm_object;
    endfunction : new
     
 endclass : bus_reg_ext
+
+//------------------------------------------------------------------------------
+// class:i1687_network 
+//------------------------------------------------------------------------------
+//This class is used to send information from a sequence to the adapter
+class i1687_network extends uvm_object;
+   `uvm_object_utils(i1687_network)
+   //1st layer SIB
+   bit    unb_sib,soc_sib,cpu_sib,gnb_sib,esram_sib;
+   //2nd layer SIB
+   bit    mux_sib,lpct_sib,sel_wir,mc_en;
+   bit    wir_queue[$], sft_dr_queue[$]; 
+   
+   function new(string name = "i1687_network");
+     super.new(name);
+   endfunction : new
+    
+endclass : i1687_network
+
 //------------------------------------------------------------------------------
 // class: jtag_monitor
 //------------------------------------------------------------------------------
@@ -915,6 +959,7 @@ class ieee_1149_1_reg_adapter extends uvm_reg_adapter;
    virtual function uvm_sequence_item reg2bus( const ref uvm_reg_bus_op rw );
       bus_reg_ext             extension;
       uvm_reg_item            item = get_item();
+
       jtag_transaction        jtag_tx = jtag_transaction::type_id::create("jtag_tx");
 
       

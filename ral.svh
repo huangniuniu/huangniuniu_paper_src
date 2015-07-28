@@ -2,6 +2,7 @@
 //------------------------------------------------------------------------------
 //Project specific
 `define TOTAL_TILE_NUM           170
+`define MC_CHAIN_LENGTH          8
 //------------------------------------------------------------------------------
 //1149 TDR definition
 `define SCANCONFIG_OPCODE         `IR_WIDTH'h24
@@ -17,6 +18,7 @@
 `define BYPASS_RST_VALUE      `BYPASS_LENGTH'h0
 
 `define I1687_OPCODE         `IR_WIDTH'hf0
+`define FST_LAYER_LENTH      5
 //1500 TDR definition
 `define VDCI_P1500_SETUP_OPCODE                    `IEEE1500_IR_WIDTH'h26f             
 `define VDCI_P1500_SETUP_LENGTH     3
@@ -207,6 +209,61 @@ class ieee1149_scanconfig_reg extends uvm_reg;
    endfunction: build
 endclass: ieee1149_scanconfig_reg
 
+//------------------------------------------------------------------------------
+// Class: ieee1149_mc_chain_reg
+//------------------------------------------------------------------------------
+
+class ieee1149_mc_chain_reg extends uvm_reg;
+   `uvm_object_utils( ieee1149_mc_chain_reg )
+
+        uvm_reg_field protocol;
+        uvm_reg_field dr_length;
+   rand uvm_reg_field mc_chain;
+
+   function new( string name = "ieee1149_mc_chain_reg" );
+      super.new( .name( name ), .n_bits( `PROTOCOL_WIDTH + `MAX_DR_WIDTH + `mc_chain_LENGTH ), .has_coverage( UVM_NO_COVERAGE ) );
+   endfunction: new
+
+   virtual function void build();
+      protocol = uvm_reg_field::type_id::create( "protocol" );
+      protocol.configure( .parent                 ( this ), 
+                        .size                   ( `PROTOCOL_WIDTH   ), 
+                        .lsb_pos                ( 0), 
+                        .access                 ( "RO" ), 
+                        .volatile               ( 0    ),
+                        .reset                  ( 0    ), 
+                        .has_reset              ( 0    ), 
+                        .is_rand                ( 0    ), 
+                        .individually_accessible( 0    ) );
+
+
+
+      dr_length = uvm_reg_field::type_id::create( "dr_length" );
+      dr_length.configure( .parent                 ( this ), 
+                        .size                   ( `MAX_DR_WIDTH    ), 
+                        .lsb_pos                ( `PROTOCOL_WIDTH    ), 
+                        .access                 ( "RW" ), 
+                        .volatile               ( 0    ),
+                        .reset                  ( 0    ), 
+                        .has_reset              ( 0    ), 
+                        .is_rand                ( 0    ), 
+                        .individually_accessible( 0    ) );
+
+      mc_chain = uvm_reg_field::type_id::create( "mc_chain" );
+      mc_chain.configure( .parent                 ( this ), 
+                       .size                   ( `MC_CHAIN_LENGTH    ), 
+                       .lsb_pos                ( `MAX_DR_WIDTH + `PROTOCOL_WIDTH    ), 
+                       .access                 ( "RW" ), 
+                       .volatile               ( 0    ),
+                       .reset                  ( 0    ), 
+                       .has_reset              ( 1    ), 
+                       .is_rand                ( 1    ), 
+                       .individually_accessible( 0   ) );
+
+   endfunction: build
+endclass: ieee1149_mc_chain_reg
+
+
 
 //------------------------------------------------------------------------------
 // Class: ieee1149_1_reg_block
@@ -215,10 +272,19 @@ endclass: ieee1149_scanconfig_reg
 class ieee1149_1_reg_block extends uvm_reg_block;
    `uvm_object_utils( ieee1149_1_reg_block )
 
-   rand ieee1149_bypass_reg            bypass_reg;
-   rand ieee1149_idcode_reg            idcode_reg;
-   rand ieee1149_scanconfig_reg        scanconfig_reg;
-   uvm_reg_map                         reg_map;
+   rand ieee1149_bypass_reg                     bypass_reg;
+   rand ieee1149_idcode_reg                     idcode_reg;
+   rand ieee1149_scanconfig_reg                 scanconfig_reg;
+   rand ieee1149_mc_chain_reg                   mc_chain_reg;
+
+   rand ieee1500_vdci_p1500_setup_reg           vdci_p1500_setup_reg;
+   rand ieee1500_rossetup_reg                   rossetup_reg;
+   rand ieee1500_rosen_reg                      rosen_reg;
+   rand ieee1500_pfh_common_ros_status_reg      pfh_common_ros_status_reg;
+   rand ieee1500_pfh_common_ros_setup_reg       pfh_common_ros_setup_reg;
+   rand ieee1500_daisy_mode_reg                 daisy_mode_reg;
+   
+   uvm_reg_map                                  reg_map;
 
    function new( string name = "ieee1149_1_reg_block" );
       super.new( .name( name ), .has_coverage( UVM_NO_COVERAGE ) );
@@ -236,12 +302,49 @@ class ieee1149_1_reg_block extends uvm_reg_block;
       scanconfig_reg = ieee1149_scanconfig_reg::type_id::create( "scanconfig_reg" );
       scanconfig_reg.configure( .blk_parent( this ) );
       scanconfig_reg.build();
+      
+      mc_chain_reg = ieee1149_mc_chain_reg::type_id::create( "mc_chain_reg" );
+      mc_chain_reg.configure( .blk_parent( this ) );
+      mc_chain_reg.build();
+      
+      vdci_p1500_setup_reg = ieee1500_vdci_p1500_setup_reg::type_id::create( "vdci_p1500_setup_reg" );
+      vdci_p1500_setup_reg.configure( .blk_parent( this ) );
+      vdci_p1500_setup_reg.build();
+
+      rossetup_reg = ieee1500_rossetup_reg::type_id::create( "rossetup_reg" );
+      rossetup_reg.configure( .blk_parent( this ) );
+      rossetup_reg.build();
+
+      rosen_reg = ieee1500_rosen_reg::type_id::create( "rosen_reg" );
+      rosen_reg.configure( .blk_parent( this ) );
+      rosen_reg.build();
+
+      pfh_common_ros_status_reg = ieee1500_pfh_common_ros_status_reg::type_id::create( "pfh_common_ros_status_reg" );
+      pfh_common_ros_status_reg.configure( .blk_parent( this ) );
+      pfh_common_ros_status_reg.build();
+
+      pfh_common_ros_setup_reg = ieee1500_pfh_common_ros_setup_reg::type_id::create( "pfh_common_ros_setup_reg" );
+      pfh_common_ros_setup_reg.configure( .blk_parent( this ) );
+      pfh_common_ros_setup_reg.build();
+
+      daisy_mode_reg = ieee1500_daisy_mode_reg::type_id::create( "daisy_mode_reg" );
+      daisy_mode_reg.configure( .blk_parent( this ) );
+      daisy_mode_reg.build();
+
 
       reg_map = create_map( .name( "reg_map" ), .base_addr( `IR_WIDTH'h00 ), 
                             .n_bytes( `MAX_N_BYTES ), .endian( UVM_LITTLE_ENDIAN ) );
       reg_map.add_reg( .rg( bypass_reg ), .offset( `BYPASS_OPCODE), .rights( "RW" ) );
       reg_map.add_reg( .rg( idcode_reg  ), .offset( `IDCODE_OPCODE ), .rights( "RW" ) );
       reg_map.add_reg( .rg( scanconfig_reg), .offset( `SCANCONFIG_OPCODE), .rights( "RW" ) );
+      reg_map.add_reg( .rg( mc_chain_reg), .offset( `I1687_OPCODE), .rights( "RW" ) );
+      reg_map.add_reg( .rg( vdci_p1500_setup_reg ), .offset( `VDCI_P1500_SETUP_OPCODE), .rights( "RW" ) );
+      reg_map.add_reg( .rg( rossetup_reg  ), .offset( `ROSSETUP_OPCODE ), .rights( "RW" ) );
+      reg_map.add_reg( .rg( rosen_reg), .offset( `ROSEN_OPCODE), .rights( "RW" ) );
+      reg_map.add_reg( .rg( pfh_common_ros_setup_reg), .offset( `PFH_COMMON_ROS_SETUP_OPCODE), .rights( "RW" ) );
+      reg_map.add_reg( .rg( pfh_common_ros_status_reg), .offset( `PFH_COMMON_ROS_STATUS_OPCODE), .rights( "RW" ) );
+      reg_map.add_reg( .rg( daisy_mode_reg), .offset( `DAISY_MODE_OPCODE), .rights( "RW" ) );
+ 
       lock_model(); // finalize the address mapping
    endfunction: build
 
@@ -644,62 +747,4 @@ class ieee1500_daisy_mode_reg extends uvm_reg;
                        .individually_accessible( 0   ) );
    endfunction: build
 endclass: ieee1500_daisy_mode_reg
-
-//------------------------------------------------------------------------------
-// Class: ieee1500_reg_block
-//------------------------------------------------------------------------------
-
-class ieee1500_reg_block extends uvm_reg_block;
-   `uvm_object_utils( ieee1500_reg_block )
-
-   rand ieee1500_vdci_p1500_setup_reg           vdci_p1500_setup_reg;
-   rand ieee1500_rossetup_reg                   rossetup_reg;
-   rand ieee1500_rosen_reg                      rosen_reg;
-   rand ieee1500_pfh_common_ros_status_reg      pfh_common_ros_status_reg;
-   rand ieee1500_pfh_common_ros_setup_reg       pfh_common_ros_setup_reg;
-   rand ieee1500_daisy_mode_reg                 daisy_mode_reg;
-   uvm_reg_map                                  reg_map;
-
-   function new( string name = "ieee1500_reg_block" );
-      super.new( .name( name ), .has_coverage( UVM_NO_COVERAGE ) );
-   endfunction: new
-
-   virtual function void build();
-      vdci_p1500_setup_reg = ieee1500_vdci_p1500_setup_reg::type_id::create( "vdci_p1500_setup_reg" );
-      vdci_p1500_setup_reg.configure( .blk_parent( this ) );
-      vdci_p1500_setup_reg.build();
-
-      rossetup_reg = ieee1500_rossetup_reg::type_id::create( "rossetup_reg" );
-      rossetup_reg.configure( .blk_parent( this ) );
-      rossetup_reg.build();
-
-      rosen_reg = ieee1500_rosen_reg::type_id::create( "rosen_reg" );
-      rosen_reg.configure( .blk_parent( this ) );
-      rosen_reg.build();
-
-      pfh_common_ros_status_reg = ieee1500_pfh_common_ros_status_reg::type_id::create( "pfh_common_ros_status_reg" );
-      pfh_common_ros_status_reg.configure( .blk_parent( this ) );
-      pfh_common_ros_status_reg.build();
-
-      pfh_common_ros_setup_reg = ieee1500_pfh_common_ros_setup_reg::type_id::create( "pfh_common_ros_setup_reg" );
-      pfh_common_ros_setup_reg.configure( .blk_parent( this ) );
-      pfh_common_ros_setup_reg.build();
-
-      daisy_mode_reg = ieee1500_daisy_mode_reg::type_id::create( "daisy_mode_reg" );
-      daisy_mode_reg.configure( .blk_parent( this ) );
-      daisy_mode_reg.build();
-
-      reg_map = create_map( .name( "reg_map" ), .base_addr( `IR_WIDTH'h00 ), 
-                            .n_bytes( `MAX_N_BYTES ), .endian( UVM_LITTLE_ENDIAN ) );
-      reg_map.add_reg( .rg( vdci_p1500_setup_reg ), .offset( `VDCI_P1500_SETUP_OPCODE), .rights( "RW" ) );
-      reg_map.add_reg( .rg( rossetup_reg  ), .offset( `ROSSETUP_OPCODE ), .rights( "RW" ) );
-      reg_map.add_reg( .rg( rosen_reg), .offset( `ROSEN_OPCODE), .rights( "RW" ) );
-      reg_map.add_reg( .rg( pfh_common_ros_setup_reg), .offset( `PFH_COMMON_ROS_SETUP_OPCODE), .rights( "RW" ) );
-      reg_map.add_reg( .rg( pfh_common_ros_status_reg), .offset( `PFH_COMMON_ROS_STATUS_OPCODE), .rights( "RW" ) );
-      reg_map.add_reg( .rg( daisy_mode_reg), .offset( `DAISY_MODE_OPCODE), .rights( "RW" ) );
-      lock_model(); // finalize the address mapping
-   endfunction: build
-
-endclass: ieee1500_reg_block   
-
 

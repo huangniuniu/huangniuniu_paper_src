@@ -127,7 +127,6 @@ class ro_en_all_sequence extends uvm_reg_sequence;
 
    task body();
       ieee1149_1_reg_block       jtag_reg_block;
-      ieee1500_reg_block         p1500_reg_block;
       uvm_status_e               status;
       //uvm_reg_data_t             value;
       bit [`VDCI_P1500_SETUP_LENGTH-1:0]           vdci_p1500_setup; 
@@ -136,31 +135,21 @@ class ro_en_all_sequence extends uvm_reg_sequence;
       bit [`PFH_COMMON_ROS_SETUP_LENGTH-1:0]       pfh_common_ros_setup;
       bit [`ROSSETUP_LENGTH-1:0]                   rossetup;
       bit [`MAX_DR_WIDTH-1:0]                      dr_length;
+      bit [`PROTOCOL_WIDTH-1:0]                    protocol;
+      bit [`TOTAL_TILE_NUM-1:0]                    exist_in_tile;
       bus_reg_ext                                  bus_reg_extension;
 
       bus_reg_extension = bus_reg_ext::type_id::create(.name("bus_reg_extension"));
 
       $cast( jtag_reg_block, model );
-      dr_length = `IDCODE_LENGTH;
-      idcode = `IDCODE_LENGTH'h55;
-      bus_reg_extension.chk_ir_tdo = 1;
-      bus_reg_extension.chk_dr_tdo = 1;
-      bus_reg_extension.exp_tdo_ir = new[`IR_WIDTH]; 
-      bus_reg_extension.exp_tdo_dr = new[`IDCODE_LENGTH]; 
-      exp_tdo_ir = `IDCODE_OPCODE;
-      exp_tdo_dr = `IDCODE_RST_VALUE;
-
-      foreach(bus_reg_extension.exp_tdo_ir[i]) begin
-         bus_reg_extension.exp_tdo_ir[i] = exp_tdo_ir[0];
-         exp_tdo_ir = exp_tdo_ir >> 1;
-      end
-
-      foreach(bus_reg_extension.exp_tdo_dr[i]) begin
-         bus_reg_extension.exp_tdo_dr[i] = exp_tdo_dr[0];
-         exp_tdo_dr = exp_tdo_dr >> 1;
-      end
-
-      write_reg( jtag_reg_block.idcode_reg, status, { idcode, dr_length }, .extension(bus_reg_extension) );
+      
+      `uvm_info("ro_en_all_sequence","configure vdci_p1500_setup",UVM_MEDIUM);
+      protocol = `IEEE_1500;
+      dr_length = `VDCI_P1500_SETUP_LENGTH;
+      vdci_p1500_setup[2] = 1'b1;
+      exist_in_tile = `VDCI_P1500_SETUP_EXIST_IN_TILE;
+      write_reg( jtag_reg_block.idcode_reg, status, { vdci_p1500_setup, exist_in_tile, dr_length, protocol } );
+      //write_reg( jtag_reg_block.idcode_reg, status, { idcode, dr_length }, .extension(bus_reg_extension) );
   endtask: body
 endclass: ro_en_all_sequence
 
