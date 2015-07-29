@@ -155,22 +155,113 @@ class bus_reg_ext extends uvm_object;
 endclass : bus_reg_ext
 
 //------------------------------------------------------------------------------
-// class:i1687_network 
+// class: i1687_transaction
+//------------------------------------------------------------------------------
+class i1687_transaction extends uvm_sequence_item;
+   //1st layer SIB
+   bit    unb_sib,soc_sib,cpc_sib,gnb_sib,esram_sib;
+   //2nd layer SIB
+   bit    mux_sib,lpct_sib,sel_wir,mc_en,esram_en3,esram_en2,esram_en1,esram_en0;
+   //3nd layer 1500 access
+   bit    gnb_wir_queue[$], gnb_wdr_queue[$], gnb_sft_ir_queue[$], gnb_sft_dr_queue[$]; 
+   bit[`TOTAL_TILE_NUM-1:0]   tile_mc_chain; 
+ 
+    `uvm_object_utils( i1687_transaction )
+    
+    function new(string name = "i1687_transaction");
+        super.new(name);
+    endfunction
+endclass: i1687_transaction 
+
+//------------------------------------------------------------------------------
+// class:i1687_network_maintainer 
 //------------------------------------------------------------------------------
 //This class is used to send information from a sequence to the adapter
-class i1687_network extends uvm_object;
-   `uvm_object_utils(i1687_network)
+class i1687_network_maintainer extends uvm_driver#( i1687_newwork );
+   `uvm_component_utils( i1687_network_maintainer)
    //1st layer SIB
-   bit    unb_sib,soc_sib,cpu_sib,gnb_sib,esram_sib;
+   bit    unb_sib,soc_sib,cpc_sib,gnb_sib,esram_sib;
    //2nd layer SIB
-   bit    mux_sib,lpct_sib,sel_wir,mc_en;
-   bit    wir_queue[$], sft_dr_queue[$]; 
+   bit    mux_sib,lpct_sib,sel_wir = 1'b1,mc_en,esram_en3,esram_en2,esram_en1,esram_en0;
+   //3nd layer 1500 access
+   bit    gnb_wir_queue[$], gnb_wdr_queue[$], gnb_sft_ir_queue[$], gnb_sft_dr_queue[$]; 
+   bit[`TOTAL_TILE_NUM-1:0]   tile_mc_chain; 
+   function new( string name, uvm_component parent );
+      super.new( name, parent );
+   endfunction: new
+
+   function void build_phase( uvm_phase phase );
+      super.build_phase( phase );
+   endfunction: build_phase
+
+   task run_phase( uvm_phase phase );
+      i1687_newwork        i1687_tx;
+      forever begin
+         if()
+      end
+   endtask: run_phase
+   void function maintainer (ref i1687_newwork i1687_tx);
+      gnb_sft_dr_queue.delete;
+      gnb_sft_ir_queue.delete;
    
-   function new(string name = "i1687_network");
-     super.new(name);
-   endfunction : new
-    
-endclass : i1687_network
+      //Concatnate unb sib
+      gnb_sft_dr_queue = {gnb_sft_dr_queue,unb_sib}; 
+      
+      //Concatnate soc sib
+      if(i1687_tx.soc_sib) begin
+         if(soc_sib == 1'b0) begin //user want set 1st layer soc_sib 
+            soc_sib = 1'b1;
+            gnb_sft_dr_queue = {gnb_sft_dr_queue,soc_sib}; 
+         end
+         else begin 
+            mux_sib = i1687_tx.mux_sib;
+            lpct_sib = i1687_tx.lpct_sib; 
+            gnb_sft_dr_queue = {gnb_sft_dr_queue,soc_sib,mux_sib,lpct_sib}; 
+         end
+      end //if(i1687_tx.soc_sib) 
+      else begin
+         if(soc_sib == 1'b1) begin //user want to close 1st layer soc_sib
+            soc_sib = 1'b0;
+            mux_sib = i1687_tx.mux_sib;
+            lpct_sib = i1687_tx.lpct_sib;
+            gnb_sft_dr_queue = {gnb_sft_dr_queue,soc_sib,mux_sib,lpct_sib}; 
+         end
+         else
+            gnb_sft_dr_queue = {gnb_sft_dr_queue,soc_sib}; 
+      end //if(!i1687_tx.soc_sib) 
+      
+      //Concatnate cpc sib
+      gnb_sft_dr_queue = {gnb_sft_dr_queue,cpc_sib}; 
+      
+      //Concatnate gnb sib
+      if(i1687_tx.gnb_sib) begin
+         if(gnb_sib == 1'b0) begin //user want set 1st layer gnb_sib 
+            gnb_sib = 1'b1;
+            gnb_sft_dr_queue = {gnb_sft_dr_queue,gnb_sib}; 
+         end
+         else begin 
+            mc_en = i1687_tx.mc_en;
+            sel_wir = i1687_tx.sel_wir;
+            gnb_sft_dr_queue = {gnb_sft_dr_queue,soc_sib,mc_en}; 
+            if(mc_en)
+               gnb_sft_dr_queue = {gnb_sft_dr_queue,soc_sib,mc_en,tile_mc_chain}; 
+            else begin
+               gnb_sft_ir_queue = {gnb_sft_dr_queue,~sel_wir,gnb_wir_queue};
+               gnb_sft_dr_queue = {gnb_sft_dr_queue,sel_wir,gnb_wdr_queue}; 
+            end
+         end
+      end //if(i1687_tx.gnb_sib) 
+      else begin
+         if(gnb_sib == 1'b1) begin //user want to close 1st layer gnb_sib
+            gnb_sib = 1'b0;
+            mc_en = i1687_tx.mc_en;
+            STOPHERE= i1687_tx.mc_en;
+            gnb_sft_dr_queue = {gnb_sft_dr_queue,gnb_sib,mux_sib,lpct_sib}; 
+         end
+         else
+      end //if(!i1687_tx.gnb_sib) 
+   endfunction
+endclass : i1687_network_maintainer
 
 //------------------------------------------------------------------------------
 // class: jtag_monitor
