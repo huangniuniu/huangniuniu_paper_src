@@ -200,6 +200,7 @@ class i1687_network_maintainer extends uvm_driver#( i1687_newwork );
          if()
       end
    endtask: run_phase
+
    void function maintainer (ref i1687_newwork i1687_tx);
       gnb_sft_dr_queue.delete;
       gnb_sft_ir_queue.delete;
@@ -255,11 +256,16 @@ class i1687_network_maintainer extends uvm_driver#( i1687_newwork );
          if(gnb_sib == 1'b1) begin //user want to close 1st layer gnb_sib
             gnb_sib = 1'b0;
             mc_en = i1687_tx.mc_en;
-            STOPHERE= i1687_tx.mc_en;
-            gnb_sft_dr_queue = {gnb_sft_dr_queue,gnb_sib,mux_sib,lpct_sib}; 
+            sel_wir = i1687_tx.sel_wir;
+            gnb_sft_dr_queue = {gnb_sft_dr_queue,gnb_sib,sel_wir,gnb_wir_queue}; 
          end
          else
+            gnb_sft_dr_queue = {gnb_sft_dr_queue,gnb_sib}; 
       end //if(!i1687_tx.gnb_sib) 
+      
+      //Concatnate esrm sib
+      esram_sib = i1687_tx.esram_sib;
+      gnb_sft_dr_queue = {gnb_sft_dr_queue,esram_sib}; 
    endfunction
 endclass : i1687_network_maintainer
 
