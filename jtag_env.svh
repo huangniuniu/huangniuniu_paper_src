@@ -5,11 +5,10 @@ class jtag_transaction extends uvm_sequence_item;
     rand  protocol_e                 protocol;
 
     rand  bit [`IR_WIDTH-1:0]        o_ir;
-
+    
+    rand  bit                        update_ir;
     rand  int unsigned               o_dr_length;
-    rand  int unsigned               o_wir_length;
     bit                              o_dr[];
-    bit                              o_wir[];
     //rand  bit [o_dr_length-1:0]      o_dr;
     
    //tdo_dr_queue/tdo_ir_queue  store tdo data
@@ -69,29 +68,6 @@ class jtag_transaction extends uvm_sequence_item;
             hex_value = o_dr[i*4+3] *8 + o_dr[i*4+2] *4 + o_dr[i*4+1] *2 + o_dr[i*4];
             $sformat(s, "%s%0h",s,hex_value);
         end
-        
-        if (protocol = IEEE_1500) begin
-            $sformat(s, "%s\n o_wir_length \t%d\n o_wir \tn",s,  o_wir_length);
-
-            four_bits_num = o_wir_length / 4;
-            remainder = o_wir_length % 4;
-            
-            if (remainder != 0) begin
-                if (remainder == 1)
-                    hex_value = o_dr[four_bits_num*4];
-                else if (remainder == 2)
-                    hex_value = o_dr[four_bits_num*4 + 1] *2 + o_dr[four_bits_num*4];
-                else if (remainder == 3)
-                    hex_value = o_dr[four_bits_num*4 + 2] *4 + o_dr[four_bits_num*4 + 1] *2 + o_dr[four_bits_num*4];
-                $sformat(s, "%s%0h",s,hex_value);
-            end 
-            
-            for ( int i = 0; i < four_bits_num; i++) begin
-                hex_value = o_dr[i*4+3] *8 + o_dr[i*4+2] *4 + o_dr[i*4+1] *2 + o_dr[i*4];
-                $sformat(s, "%s%0h",s,hex_value);
-            end
- 
-         end//if(protocol = IEEE_1500) 
         
         $sformat(s, "%s\n chk_ir_tdo = \t%d\n chk_dr_tdo = \t%d\n",s,  chk_ir_tdo, chk_dr_tdo);
         $sformat(s, "%s\n ////////////////////////////////////////////////////////////\n",s);
