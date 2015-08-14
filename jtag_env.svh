@@ -1199,3 +1199,66 @@ class jtag_env extends uvm_env;
    endfunction: connect_phase
 
 endclass:jtag_env
+
+//---------------------------------------------------------------------------
+// Class: sib_node 
+//---------------------------------------------------------------------------
+class sib_node extends uvm_object;
+   `uvm_object_utils(sib_node)
+   bit    in0; 
+   bit    in1; 
+   bit    value = value ? in1 : in0;
+   bit    out = value; 
+   
+   function new(string name = "sib_node");
+     super.new(name);
+   endfunction : new
+    
+endclass : sib_node
+
+//---------------------------------------------------------------------------
+// Class: reg_node 
+//---------------------------------------------------------------------------
+class reg_node extends uvm_object;
+   `uvm_object_utils(reg_node)
+   bit    in; 
+   bit    is_selwir; 
+   bit    value = in;
+   bit    out = value;
+   
+   function new(string name = "reg_node");
+     super.new(name);
+   endfunction : new
+    
+endclass : reg_node
+
+virtual function unsigned int build_network (viod); 
+   sib_node          sib[4], sib_node_q[$];
+   reg_node          sel_wir[4];
+   reg_node          wir_dynmc[], wdr_dynmc[]; reg_node_dynmc[];
+   unsigned int      chain_length;
+   bit               tdi, tdo; 
+   //sel_wir node initialize.
+   foreach (sel_wir[i]) begin
+      sel_wir[i].is_selwir = 1;
+      sel_wir[i].value = 1;
+   end
+
+   tdo = sib[2].out;
+   
+   sib[2].in0 = sib[3].out;
+   sib[2].in1 = sel_wir[2].out;
+
+   sib[3].in0 = tdi;
+   sib[3].in1 = sel_wir[3].out;
+
+   if(sib[3].value == 1 ) begin
+      if(sel_wir[3].value == 1) begin
+         wir_dynmc[wir_dynmc.size - 1].in = tdi;
+         stophere;
+      end
+      else begin
+      end
+   end
+
+endfunction: build_network
