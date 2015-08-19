@@ -8,7 +8,7 @@
 //   This is the DUT.
 //------------------------------------------------------------------------------
 
-module system_shell( jtag_if.slave_mp jtag_if );
+module system_shell( jtag_if.slave_mp jtag_if, clock_if clk_if );
    import jtag_pkg::*; 
        
    //-------------------------------------------------------------------------------
@@ -25,6 +25,7 @@ module system_shell( jtag_if.slave_mp jtag_if );
    wire           reset; 
    wire           tck; 
    wire           tdi; 
+   wire           sysclk; 
    reg            muxed_tdo; 
    
    //-------------------------------------------------------------------------------

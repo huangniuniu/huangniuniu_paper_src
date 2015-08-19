@@ -23,8 +23,18 @@ interface jtag_if( input bit tck, input bit trst);
         input tms;
     endclocking: monitor_cb
     modport master_mp( input trst, clocking negedge_cb, clocking posedge_cb );
-    modport slave_mp ( input tck, trst, tdi, tms, output tdo);
+    modport slave_mp ( input trst, tdi, tms, output tdo);
     modport monitor_mp ( input trst, clocking monitor_cb);
 endinterface: jtag_if
+
+//------------------------------------------------------------------------------
+// Interface: clock_if 
+//------------------------------------------------------------------------------
+
+interface clock_if( output bit tck, sysclk);
+    logic tck;
+    logic sysclk;
+
+endinterface: clock_if
 
 

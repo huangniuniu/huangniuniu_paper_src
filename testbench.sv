@@ -7,16 +7,17 @@ module top;
    `timescale 1ns/1ns
    import uvm_pkg::*;
 
-   logic          tck;
+   //logic          tck;
    logic          trst;
    
-   jtag_if        jtag_if( tck, trst );
-   system_shell   dut( jtag_if.slave_mp );  
-   initial begin
-      tck = 0;
-      #10ns;
-      forever #`TCK_HALF_PERIOD tck = ~tck;
-   end
+   jtag_if        jtag_if(trst);
+   clock_if       clk_if;
+   system_shell   dut( jtag_if.slave_mp, clk_if );  
+   //initial begin
+   //   tck = 0;
+   //   #10ns;
+   //   forever #`TCK_HALF_PERIOD tck = ~tck;
+   //end
 
    initial begin
       trst = 0;
