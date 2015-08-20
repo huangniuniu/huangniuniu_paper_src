@@ -122,7 +122,7 @@ class bus_reg_ext extends uvm_object;
    bit    chk_dr_tdo; 
    bit    exp_tdo_dr[];
    bit    exp_tdo_ir[];
-   bit    dr_ext[];
+   bit    dr_ext[]; //store the register's filds if its total bits number > 64bits.
    
    function new(string name = "bus_reg_ext");
      super.new(name);
@@ -1232,33 +1232,128 @@ class reg_node extends uvm_object;
     
 endclass : reg_node
 
-virtual function unsigned int build_network (viod); 
-   sib_node          sib[4], sib_node_q[$];
-   reg_node          sel_wir[4];
-   reg_node          wir_dynmc[], wdr_dynmc[]; reg_node_dynmc[];
-   unsigned int      chain_length;
-   bit               tdi, tdo; 
+virtual function void node_initialize(void);
    //sel_wir node initialize.
    foreach (sel_wir[i]) begin
       sel_wir[i].is_selwir = 1;
       sel_wir[i].value = 1;
    end
+endfunction :node_initialize
 
-   tdo = sib[2].out;
+virtual function unsigned int dft_tdr_network (viod); 
+   sib_node                      sib[4];
+   reg_node                      sel_wir[4];
+   reg_node                      wir[`IEEE1500_IR_WIDTH], wdr_dynmc[]; 
+   reg_node                      cascd_wir[`IEEE1500_IR_WIDTH], cascd_wdr_dynmc[];
+   unsigned int                  chain_length = 2;
+   bit                           tdi, tdo; 
+   bit[`IEEE1500_IR_WIDTH-1:0]   wir_data;
    
+   //calculate current chain_length
+   case({sib[1].value, sib[0].value, sib[3].value, sib[2].value})
+      4'b0001: begin
+         chain_length = ((sel_wir[2].value == 1) ? chain_length + `IEEE1500_IR_WIDTH : chain_length ) + 1;    
+      end
+      4'b0010: begin
+         chain_length = ((sel_wir[3].value == 1) ? chain_length + `IEEE1500_IR_WIDTH : chain_length ) + 1;    
+      end
+      4'b0101: begin
+         chain_length = ((sel_wir[0].value == 1) ? chain_length + `IEEE1500_IR_WIDTH : chain_length ) + 2;    
+      end
+      4'b1001: begin
+         chain_length = ((sel_wir[1].value == 1) ? chain_length + `IEEE1500_IR_WIDTH : chain_length ) + 2;    
+      end
+   endcase
+   tdo = sib[2].out;
+  
+   //sib2 connection
    sib[2].in0 = sib[3].out;
    sib[2].in1 = sel_wir[2].out;
 
+   //sib3 connection
    sib[3].in0 = tdi;
    sib[3].in1 = sel_wir[3].out;
 
+   //sel_wir[3] connection
+   sel_wir[3].in = (sel_wir[3].value == 1 ) ? wir[0].out : wdr_dynmc[0].out;
+   
+   //wir/wdr_dynmc connection
    if(sib[3].value == 1 ) begin
       if(sel_wir[3].value == 1) begin
-         wir_dynmc[wir_dynmc.size - 1].in = tdi;
-         stophere;
+         wir[`IEEE1500_IR_WIDTH - 1].in = tdi;
+         for(i=0; i<`IEEE1500_IR_WIDTH - 1; i++)
+            wir[i].in = wir[i+1].out;
       end
       else begin
+         wdr_dynmc[wdr_dynmc.size - 1].in = tdi;
+         for(i=0; i<wdr_dynmc.size - 1; i++)
+            wdr_dynmc[i].in = wdr_dynmc[i+1].out;
       end
    end
+   
+   //----------------------------
+   //sel_wir[2] connection
+   //----------------------------
+   if(sib[2].value == 1 ) begin
+      //connect wir to chain
+      if(sel_wir[2].value == 1) begin
+         wir[`IEEE1500_IR_WIDTH - 1].in = sib3.out;
+         for(i=0; i<`IEEE1500_IR_WIDTH - 1; i++)
+            wir[i].in = wir[i+1].out;
+         //sel_wir[2] connection branch3
+         sel_wir[2].in = wir[0].out;
+      end
+      else begin
+         //get current ir opecode
+         foreach(wir[i]) wir_data[i] = wir[i].value;
+         if(wir_data == `TILE0_SIB) begin
+            //sel_wir[2] connection branch2
+            sel_wir[2].in = sib[0].out;
+            
+            //----------------------------
+            //sib0 connection
+            //----------------------------
+            sib0.in0 = sib1.out;
+            sib0.in1 = sel_wir[0].out;
 
-endfunction: build_network
+            //----------------------------
+            //sel_wir[0] connection
+            //----------------------------
+            sel_wir[0].in = (sel_wir[0].value) ? cascd_wir[0].out ? cascd_wdr_dynmc[0].out;
+            if(sel_wir[0].value == 1) begin
+               cascd_wir[`IEEE1500_IR_WIDTH-1].in = sib1.out;
+               for(i=0; i < `IEEE1500_IR_WIDTH - 1; i++) cascd_wir[i].in = cascd_wir[i+1].out;
+            end
+            else begin
+               cascd_wdr_dynmc[cascd_wdr_dynmc.size-1].in = sib1.out;
+               for(i=0; i < cascd_wdr_dynmc.size - 1; i++) cascd_wdr_dynmc[i].in = cascd_wdr_dynmc[i+1].out;
+            end
+            //----------------------------
+            //sib1 connection
+            //----------------------------
+            sib1.in0 = sib3.out;
+            sib1.in1 = sel_wir[1].out;
+
+            //----------------------------
+            //sel_wir[1] connection
+            //----------------------------
+            sel_wir[1].in = (sel_wir[1].value) ? cascd_wir[0].out ? cascd_wdr_dynmc[0].out;
+            if(sel_wir[1].value == 1) begin
+               cascd_wir[`IEEE1500_IR_WIDTH-1].in = sib3.out;
+               for(i=0; i < `IEEE1500_IR_WIDTH - 1; i++) cascd_wir[i].in = cascd_wir[i+1].out;
+            end
+            else begin
+               cascd_wdr_dynmc[cascd_wdr_dynmc.size-1].in = sib3.out;
+               for(i=0; i < cascd_wdr_dynmc.size - 1; i++) cascd_wdr_dynmc[i].in = cascd_wdr_dynmc[i+1].out;
+            end
+         end// if(wir_data == `TILE0_SIB) begin
+         else begin
+            wdr_dynmc[wdr_dynmc.size - 1].in = sib3.out;
+            for(i=0; i<wdr_dynmc.size - 1; i++)
+            wdr_dynmc[i].in = wdr_dynmc[i+1].out;
+            //sel_wir[2] connection branch1
+            sel_wir[2].in = wdr_dynmc[0].out;
+         end// !if(wir_data == `TILE0_SIB) begin
+      end //!if(sel_wir[2].value == 1) begin
+   end //if(sib[2].value == 1 ) begin
+endfunction: dft_tdr_network
