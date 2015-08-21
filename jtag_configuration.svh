@@ -19,23 +19,39 @@ class jtag_configuration extends uvm_object;
 endclass: jtag_configuration
 
 //---------------------------------------------------------------------------
-// Class: clock_configuration
+// Class: clk_configuration
 //---------------------------------------------------------------------------
 
-class clock_configuration extends uvm_object;
-   `uvm_object_utils( clock_configuration )
+class clk_configuration extends uvm_object;
+   `uvm_object_utils( clk_configuration )
 
    function new( string name = "" );
       super.new( name );
    endfunction: new
 
-   virtual clock_if          clock_vi;
+   virtual clk_if          clk_vi;
 
    bit                      gen_stil_file;
    bit                      stop_tck,stop_sysclk;
    //string                   stil_file_name;
    int                      tck_half_period;
    int                      sysclk_half_period;
-endclass: clock_configuration
+endclass: clk_configuration
+
+//---------------------------------------------------------------------------
+// Class: reset_configuration
+//---------------------------------------------------------------------------
+
+class reset_configuration extends uvm_object;
+   `uvm_object_utils( reset_configuration )
+
+   function new( string name = "" );
+      super.new( name );
+   endfunction: new
+
+   virtual reset_if          reset_vi;
+
+   bit                       gen_stil_file;
+endclass: reset_configuration
 
 

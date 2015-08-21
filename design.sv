@@ -8,7 +8,7 @@
 //   This is the DUT.
 //------------------------------------------------------------------------------
 
-module system_shell( jtag_if.slave_mp jtag_if, clock_if clk_if );
+module system_shell( jtag_if.slave_mp jtag_if, clk_if clk_if );
    import jtag_pkg::*; 
        
    //-------------------------------------------------------------------------------
@@ -26,6 +26,9 @@ module system_shell( jtag_if.slave_mp jtag_if, clock_if clk_if );
    wire           tck; 
    wire           tdi; 
    wire           sysclk; 
+   wire           RESET_L; 
+   wire           VDD; 
+   wire           VSS; 
    reg            muxed_tdo; 
    
    //-------------------------------------------------------------------------------
@@ -50,7 +53,7 @@ module system_shell( jtag_if.slave_mp jtag_if, clock_if clk_if );
    //1149_1 FSM
    //-------------------------------------------------------------------------------
    assign   reset = jtag_if.trst;
-   assign   tck = jtag_if.tck;
+   assign   tck = clk_if.tck;
    assign   tdi = jtag_if.tdi;
    assign   jtag_if.tdo = muxed_tdo;
 

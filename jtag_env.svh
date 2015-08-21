@@ -265,6 +265,93 @@ class jtag_monitor extends uvm_monitor;
 
 endclass:jtag_monitor
 //---------------------------------------------------------------------------
+// Class: reset_driver
+//---------------------------------------------------------------------------
+class reset_driver extends uvm_driver#( jtag_transaction );
+   `uvm_component_utils( reset_driver )
+   
+   virtual reset_if          reset_vi;
+
+   bit                       gen_stil_file;
+   reset_configuration       reset_cfg; 
+
+   function new( string name, uvm_component parent );
+      super.new( name, parent );
+   endfunction: new
+   
+   function void build_phase( uvm_phase phase );
+      super.build_phase( phase );
+
+      reset_cfg = reset_configuration::type_id::create(.name("reset_cfg"));
+      assert(uvm_config_db#(reset_configuration)::get ( .cntxt( this ), .inst_name( "*" ), .field_name( "reset_cfg" ), .value( this.reset_cfg) ));
+      
+      gen_stil_file = reset_cfg.gen_stil_file;
+      reset_vi = reset_cfg.reset_vi;
+   endfunction: build_phase
+
+   task run_phase( uvm_phase phase );
+      initial begin
+         @reset_vi.posedge_cb;
+         reset_vi.posedge_cb.trst <= 1'b1;
+         repeat (3) @reset_vi.posedge_cb;
+         reset_vi.posedge_cb.trst <= 1'b0;
+         reset_vi.posedge_cb.RESET_L<= 1'b0;
+         @reset_vi.posedge_cb;
+         reset_vi.posedge_cb.RESET_L<= 1'b1;
+      end
+   endtask: run_phase
+endclass: reset_driver
+
+//---------------------------------------------------------------------------
+// Class: clk_driver
+//---------------------------------------------------------------------------
+class clk_driver extends uvm_driver#( jtag_transaction );
+   `uvm_component_utils( clk_driver )
+   
+   virtual clk_if          clk_vi;
+
+   bit                       gen_stil_file;
+   bit                       stop_tck,stop_sysclk;
+   int                       tck_half_period;
+   int                       sysclk_half_period;
+   clk_configuration         clk_cfg; 
+   function new( string name, uvm_component parent );
+      super.new( name, parent );
+   endfunction: new
+   
+   function void build_phase( uvm_phase phase );
+      super.build_phase( phase );
+
+      clk_cfg = clk_configuration::type_id::create(.name("clk_cfg"));
+      assert(uvm_config_db#(clk_configuration)::get ( .cntxt( this ), .inst_name( "*" ), .field_name( "clk_cfg" ), .value( this.clk_cfg) ));
+      
+      gen_stil_file = clk_cfg.gen_stil_file;
+      tck_half_period = clk_cfg.tck_half_period;
+      sysclk_half_period = clk_cfg.sysclk_half_period;
+      clk_vi = clk_cfg.clk_vi;
+   endfunction: build_phase
+
+   task run_phase( uvm_phase phase );
+      
+      clk_vi.tck = 0;
+      clk_vi.sysclk = 0; 
+      #tck_half_period;
+      forever begin
+        #sysclk_half_period;
+        clk_vi.sysclk = ~clk_vi.sysclk; 
+        #sysclk_half_period;
+        clk_vi.sysclk = ~clk_vi.sysclk; 
+        
+        clk_vi.tck = ~clk_vi.tck;
+        
+        #sysclk_half_period;
+        clk_vi.sysclk = ~clk_vi.sysclk; 
+        #sysclk_half_period;
+        clk_vi.sysclk = ~clk_vi.sysclk; 
+      end
+   endtask: run_phase
+endclass: clk_driver
+//---------------------------------------------------------------------------
 // Class: jtag_driver
 //---------------------------------------------------------------------------
 
@@ -1055,13 +1142,17 @@ class jtag_env extends uvm_env;
    jtag_scoreboard      scoreboard;
    jtag_configuration   cfg;
    jtag_reg_predictor   reg_predictor;
-
+   clk_driver           clk_drv;
+   reset_driver         reset_drv;
    function void build_phase( uvm_phase phase );
       super.build_phase( phase );
 	   
       agent = jtag_agent::type_id::create           (.name( "agent"      ), .parent(this));
       scoreboard = jtag_scoreboard::type_id::create (.name( "scoreboard" ), .parent(this));
       reg_predictor = jtag_reg_predictor::type_id::create(.name( "reg_predictor" ), .parent(this));
+      
+      clk_drv = clk_driver::type_id::create(.name( "clk_drv" ), .parent(this));
+      reset_drv = reset_driver::type_id::create(.name( "reset_drv" ), .parent(this));
       
       assert(uvm_config_db#( jtag_configuration)::get ( .cntxt( this ), .inst_name( "*" ), .field_name( "jtag_cfg" ), .value( cfg) ))
       else `uvm_fatal("NOVIF", "Failed to get virtual interfaces form uvm_config_db.\n");
