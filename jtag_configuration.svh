@@ -32,6 +32,7 @@ class clock_configuration extends uvm_object;
    virtual clock_if          clock_vi;
 
    bit                      gen_stil_file;
+   bit                      stop_tck,stop_sysclk;
    //string                   stil_file_name;
    int                      tck_half_period;
    int                      sysclk_half_period;
