@@ -290,15 +290,13 @@ class reset_driver extends uvm_driver#( jtag_transaction );
    endfunction: build_phase
 
    task run_phase( uvm_phase phase );
-      initial begin
-         @reset_vi.posedge_cb;
-         reset_vi.posedge_cb.trst <= 1'b1;
-         repeat (3) @reset_vi.posedge_cb;
-         reset_vi.posedge_cb.trst <= 1'b0;
-         reset_vi.posedge_cb.RESET_L<= 1'b0;
-         @reset_vi.posedge_cb;
-         reset_vi.posedge_cb.RESET_L<= 1'b1;
-      end
+         @reset_vi.driver_mp.posedge_cb;
+         reset_vi.driver_mp.posedge_cb.trst <= 1'b1;
+         repeat (3) @reset_vi.driver_mp.posedge_cb;
+         reset_vi.driver_mp.posedge_cb.trst <= 1'b0;
+         reset_vi.driver_mp.posedge_cb.RESET_L<= 1'b0;
+         @reset_vi.driver_mp.posedge_cb;
+         reset_vi.driver_mp.posedge_cb.RESET_L<= 1'b1;
    endtask: run_phase
 endclass: reset_driver
 

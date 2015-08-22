@@ -10,7 +10,8 @@ class jtag_base_test extends uvm_test;
    endfunction: new
 
    jtag_configuration       jtag_cfg;
-   clk_configuration      clk_cfg;
+   clk_configuration        clk_cfg;
+   reset_configuration      reset_cfg;
    //jtag_env               jtag_env;
    jtag_env                 env;
    ieee1149_1_reg_block     jtag_reg_block; 
@@ -20,6 +21,7 @@ class jtag_base_test extends uvm_test;
 
       jtag_cfg = jtag_configuration::type_id::create( .name( "jtag_cfg" ) );
       clk_cfg = clk_configuration::type_id::create( .name( "clk_cfg" ) );
+      reset_cfg = reset_configuration::type_id::create( .name( "reset_cfg" ) );
 
       env = jtag_env::type_id::create( .name( "env" ), .parent( this ) );
 
@@ -33,11 +35,16 @@ class jtag_base_test extends uvm_test;
       assert(uvm_config_db#( virtual clk_if )::get ( .cntxt( this ), .inst_name( "*" ), .field_name( "clk_if" ), .value( clk_cfg.clk_vi) ))
       else `uvm_fatal("NOVIF", "Failed to get virtual interfaces form uvm_config_db.\n");
       
+      assert(uvm_config_db#( virtual reset_if )::get ( .cntxt( this ), .inst_name( "*" ), .field_name( "reset_if" ), .value( reset_cfg.reset_vi) ))
+      else `uvm_fatal("NOVIF", "Failed to get virtual interfaces form uvm_config_db.\n");
+      
       jtag_cfg.gen_stil_file = `OFF;
       clk_cfg.gen_stil_file = `OFF;
+      reset_cfg.gen_stil_file = `OFF;
 
       uvm_config_db#( jtag_configuration )::set( .cntxt( this ), .inst_name( "*" ), .field_name( "jtag_cfg" ), .value( jtag_cfg ) );
       uvm_config_db#( clk_configuration )::set( .cntxt( this ), .inst_name( "*" ), .field_name( "clk_cfg" ), .value( clk_cfg ) );
+      uvm_config_db#( reset_configuration )::set( .cntxt( this ), .inst_name( "*" ), .field_name( "reset_cfg" ), .value( reset_cfg ) );
       
    endfunction: build_phase
 
@@ -71,8 +78,11 @@ class jtag_1149_1_test extends jtag_base_test;
       clk_cfg.gen_stil_file = `ON;
       clk_cfg.tck_half_period = `TCK_HALF_PERIOD;
       clk_cfg.sysclk_half_period = `TCK_HALF_PERIOD/2;
+      
+      reset_cfg.gen_stil_file = `ON;
       uvm_config_db#( jtag_configuration )::set( .cntxt( this ), .inst_name( "*" ), .field_name( "jtag_cfg" ), .value( jtag_cfg ) );
       uvm_config_db#( clk_configuration )::set( .cntxt( this ), .inst_name( "*" ), .field_name( "clk_cfg" ), .value( clk_cfg ) );
+      uvm_config_db#( reset_configuration )::set( .cntxt( this ), .inst_name( "*" ), .field_name( "reset_cfg" ), .value( reset_cfg ) );
    endfunction: build_phase
 
    task main_phase( uvm_phase phase);

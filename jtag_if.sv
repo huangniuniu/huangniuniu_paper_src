@@ -47,6 +47,8 @@ interface reset_if( input bit tck);
        output trst;
        output RESET_L;
     endclocking: posedge_cb 
+    modport dut_mp(input trst, RESET_L);
+    modport driver_mp(clocking posedge_cb);
 endinterface: reset_if
 
 //------------------------------------------------------------------------------
