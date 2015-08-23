@@ -56,7 +56,17 @@ endinterface: reset_if
 //------------------------------------------------------------------------------
 
 interface pad_if( input bit tck );
-
+   logic VDD;
+   logic VSS;
+   logic POWER_OK;
+   
+    clocking posedge_cb @ ( posedge tck);
+       output VDD;
+       output VSS;
+       output POWER_OK;
+    endclocking: posedge_cb 
+    modport dut_mp(input VDD, VSS, POWER_OK);
+    modport driver_mp(clocking posedge_cb);
 endinterface: pad_if
 
 

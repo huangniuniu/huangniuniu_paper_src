@@ -8,7 +8,7 @@
 //   This is the DUT.
 //------------------------------------------------------------------------------
 
-module system_shell( jtag_if.slave_mp jtag_if, clk_if clk_if, reset_if.dut_mp reset_if);
+module system_shell( jtag_if.slave_mp jtag_if, clk_if clk_if, reset_if.dut_mp reset_if, pad_if.dut_mp pad_if);
    import jtag_pkg::*; 
        
    //-------------------------------------------------------------------------------

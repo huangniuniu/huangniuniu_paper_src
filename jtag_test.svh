@@ -12,6 +12,7 @@ class jtag_base_test extends uvm_test;
    jtag_configuration       jtag_cfg;
    clk_configuration        clk_cfg;
    reset_configuration      reset_cfg;
+   pad_configuration        pad_cfg;
    //jtag_env               jtag_env;
    jtag_env                 env;
    ieee1149_1_reg_block     jtag_reg_block; 
@@ -22,6 +23,7 @@ class jtag_base_test extends uvm_test;
       jtag_cfg = jtag_configuration::type_id::create( .name( "jtag_cfg" ) );
       clk_cfg = clk_configuration::type_id::create( .name( "clk_cfg" ) );
       reset_cfg = reset_configuration::type_id::create( .name( "reset_cfg" ) );
+      pad_cfg = pad_configuration::type_id::create( .name( "pad_cfg" ) );
 
       env = jtag_env::type_id::create( .name( "env" ), .parent( this ) );
 
@@ -38,13 +40,18 @@ class jtag_base_test extends uvm_test;
       assert(uvm_config_db#( virtual reset_if )::get ( .cntxt( this ), .inst_name( "*" ), .field_name( "reset_if" ), .value( reset_cfg.reset_vi) ))
       else `uvm_fatal("NOVIF", "Failed to get virtual interfaces form uvm_config_db.\n");
       
+      assert(uvm_config_db#( virtual pad_if )::get ( .cntxt( this ), .inst_name( "*" ), .field_name( "pad_if" ), .value( pad_cfg.pad_vi) ))
+      else `uvm_fatal("NOVIF", "Failed to get virtual interfaces form uvm_config_db.\n");
+      
       jtag_cfg.gen_stil_file = `OFF;
       clk_cfg.gen_stil_file = `OFF;
       reset_cfg.gen_stil_file = `OFF;
+      pad_cfg.gen_stil_file = `OFF;
 
       uvm_config_db#( jtag_configuration )::set( .cntxt( this ), .inst_name( "*" ), .field_name( "jtag_cfg" ), .value( jtag_cfg ) );
       uvm_config_db#( clk_configuration )::set( .cntxt( this ), .inst_name( "*" ), .field_name( "clk_cfg" ), .value( clk_cfg ) );
       uvm_config_db#( reset_configuration )::set( .cntxt( this ), .inst_name( "*" ), .field_name( "reset_cfg" ), .value( reset_cfg ) );
+      uvm_config_db#( pad_configuration )::set( .cntxt( this ), .inst_name( "*" ), .field_name( "pad_cfg" ), .value( pad_cfg ) );
       
    endfunction: build_phase
 

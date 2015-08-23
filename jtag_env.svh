@@ -112,6 +112,18 @@ class jtag_transaction extends uvm_sequence_item;
 endclass:jtag_transaction
 
 //------------------------------------------------------------------------------
+// class: stil_info_transaction
+//------------------------------------------------------------------------------
+class stil_info_transaction extends uvm_sequence_item;
+    string     stil_info;
+
+    `uvm_object_utils( stil_info_transaction )
+    
+    function new(string name = "stil_info_transaction");
+        super.new(name);
+    endfunction
+ endclass: stil_info_transaction    
+//------------------------------------------------------------------------------
 // class:bus_reg_ext 
 //------------------------------------------------------------------------------
 //This class is used to send information from a sequence to the adapter
@@ -265,6 +277,39 @@ class jtag_monitor extends uvm_monitor;
 
 endclass:jtag_monitor
 //---------------------------------------------------------------------------
+// Class: pad_driver
+//---------------------------------------------------------------------------
+class pad_driver extends uvm_driver#( jtag_transaction );
+   `uvm_component_utils( pad_driver )
+   
+   virtual pad_if          pad_vi;
+
+   bit                       gen_stil_file;
+   pad_configuration       pad_cfg; 
+   uvm_analysis_port #(stil_info_transaction)      pad_drv_ap;
+   function new( string name, uvm_component parent );
+      super.new( name, parent );
+   endfunction: new
+   
+   function void build_phase( uvm_phase phase );
+      super.build_phase( phase );
+      pad_drv_ap = new("pad_drv_ap", this );
+      pad_cfg = pad_configuration::type_id::create(.name("pad_cfg"));
+      assert(uvm_config_db#(pad_configuration)::get ( .cntxt( this ), .inst_name( "*" ), .field_name( "pad_cfg" ), .value( this.pad_cfg) ));
+      
+      gen_stil_file = pad_cfg.gen_stil_file;
+      pad_vi = pad_cfg.pad_vi;
+   endfunction: build_phase
+
+   task run_phase( uvm_phase phase );
+         @pad_vi.driver_mp.posedge_cb;
+         pad_vi.driver_mp.posedge_cb.POWER_OK<= 1'b1;
+         pad_vi.driver_mp.posedge_cb.VDD <= 1'b1;
+         pad_vi.driver_mp.posedge_cb.VSS <= 1'b0;
+   endtask: run_phase
+endclass: pad_driver
+
+//---------------------------------------------------------------------------
 // Class: reset_driver
 //---------------------------------------------------------------------------
 class reset_driver extends uvm_driver#( jtag_transaction );
@@ -274,14 +319,14 @@ class reset_driver extends uvm_driver#( jtag_transaction );
 
    bit                       gen_stil_file;
    reset_configuration       reset_cfg; 
-
+   uvm_analysis_port #(stil_info_transaction)      reset_drv_ap;
    function new( string name, uvm_component parent );
       super.new( name, parent );
    endfunction: new
    
    function void build_phase( uvm_phase phase );
       super.build_phase( phase );
-
+      reset_drv_ap = new("reset_drv_ap", this );
       reset_cfg = reset_configuration::type_id::create(.name("reset_cfg"));
       assert(uvm_config_db#(reset_configuration)::get ( .cntxt( this ), .inst_name( "*" ), .field_name( "reset_cfg" ), .value( this.reset_cfg) ));
       
@@ -313,13 +358,15 @@ class clk_driver extends uvm_driver#( jtag_transaction );
    int                       tck_half_period;
    int                       sysclk_half_period;
    clk_configuration         clk_cfg; 
+   uvm_analysis_port #(stil_info_transaction) clk_drv_ap;
    function new( string name, uvm_component parent );
       super.new( name, parent );
    endfunction: new
    
    function void build_phase( uvm_phase phase );
       super.build_phase( phase );
-
+      
+      clk_drv_ap = new("clk_drv_ap ", this);
       clk_cfg = clk_configuration::type_id::create(.name("clk_cfg"));
       assert(uvm_config_db#(clk_configuration)::get ( .cntxt( this ), .inst_name( "*" ), .field_name( "clk_cfg" ), .value( this.clk_cfg) ));
       
@@ -356,6 +403,7 @@ endclass: clk_driver
 class jtag_driver extends uvm_driver#( jtag_transaction );
    `uvm_component_utils( jtag_driver )
    
+   uvm_analysis_port #(stil_info_transaction)   jtag_drv_ap; 
    virtual jtag_if         jtag_vi;
    bit                     gen_stil_file;
    string                  stil_file_name;
@@ -368,6 +416,7 @@ class jtag_driver extends uvm_driver#( jtag_transaction );
 
    function void build_phase( uvm_phase phase );
       super.build_phase( phase );
+      jtag_drv_ap = new("jtag_drv_ap ", this);
 
       jtag_cfg = jtag_configuration::type_id::create( .name( "jtag_cfg" ) );
       assert(uvm_config_db#(jtag_configuration)::get ( .cntxt( this ), .inst_name( "*" ), .field_name( "jtag_cfg" ), .value( this.jtag_cfg) ));
@@ -681,7 +730,7 @@ class jtag_driver_atpg extends jtag_driver;
 
    function void build_phase( uvm_phase phase );
       super.build_phase( phase );
-
+      
       jtag_cfg = jtag_configuration::type_id::create( .name( "jtag_cfg" ) );
       assert(uvm_config_db#(jtag_configuration)::get ( .cntxt( this ), .inst_name( "*" ), .field_name( "jtag_cfg" ), .value( this.jtag_cfg) ));
 
@@ -1096,6 +1145,49 @@ class jtag_agent extends uvm_agent;
       mon.jtag_ap.connect(jtag_ap);
    endfunction: connect_phase
 endclass:jtag_agent
+//---------------------------------------------------------------------------
+// Class: stil_generator
+//---------------------------------------------------------------------------
+`uvm_analysis_imp_decl(_jtag_drv)
+`uvm_analysis_imp_decl(_clk_drv)
+`uvm_analysis_imp_decl(_pad_drv)
+class stil_generator extends uvm_subscriber#( stil_info_transaction );
+   `uvm_component_utils( stil_generator )
+
+   uvm_analysis_imp_jtag_drv  #(stil_info_transaction, stil_generator) jtag_drv_imp_export;
+   uvm_analysis_imp_clk_drv   #(stil_info_transaction, stil_generator) clk_drv_imp_export;
+   uvm_analysis_imp_pad_drv   #(stil_info_transaction, stil_generator) pad_drv_imp_export;
+   
+   bit         jtag_drv_active;
+   bit         clk_drv_active;
+   bit         reset_drv_active;
+   bit         pad_drv_active;
+
+   function new( string name, uvm_component parent );
+      super.new( name, parent );
+   endfunction: new
+   
+   function void build_phase(uvm_phase phase);
+      super.build_phase( phase );
+      
+      jtag_drv_imp_export = new("jtag_drv_imp_export", this);
+      clk_drv_imp_export = new("clk_drv_imp_export", this);
+      pad_drv_imp_export = new("pad_drv_imp_export", this);
+   endfunction: build_phase
+   
+   function void write( stil_info_transaction t);
+   endfunction: write
+ 
+   function void write_jtag_drv( stil_info_transaction t);
+   endfunction: write_jtag_drv
+   
+   function void write_clk_drv( stil_info_transaction t);
+   endfunction: write_clk_drv
+   
+   function void write_pad_drv( stil_info_transaction t);
+   endfunction: write_pad_drv
+endclass:stil_generator
+
 
 //---------------------------------------------------------------------------
 // Class: jtag_scoreboard
@@ -1142,6 +1234,9 @@ class jtag_env extends uvm_env;
    jtag_reg_predictor   reg_predictor;
    clk_driver           clk_drv;
    reset_driver         reset_drv;
+   pad_driver           pad_drv;
+
+   stil_generator       stil_gen;
    function void build_phase( uvm_phase phase );
       super.build_phase( phase );
 	   
@@ -1151,6 +1246,8 @@ class jtag_env extends uvm_env;
       
       clk_drv = clk_driver::type_id::create(.name( "clk_drv" ), .parent(this));
       reset_drv = reset_driver::type_id::create(.name( "reset_drv" ), .parent(this));
+      pad_drv = pad_driver::type_id::create(.name( "pad_drv" ), .parent(this));
+      stil_gen = stil_generator::type_id::create(.name( "stil_gen" ), .parent(this));
       
       assert(uvm_config_db#( jtag_configuration)::get ( .cntxt( this ), .inst_name( "*" ), .field_name( "jtag_cfg" ), .value( cfg) ))
       else `uvm_fatal("NOVIF", "Failed to get virtual interfaces form uvm_config_db.\n");
@@ -1158,6 +1255,10 @@ class jtag_env extends uvm_env;
 
    function void connect_phase( uvm_phase phase );
       agent.jtag_ap.connect(scoreboard.analysis_export);
+      agent.drv.jtag_drv_ap.connect(stil_gen.jtag_drv_imp_export); 
+      clk_drv.clk_drv_ap.connect(stil_gen.clk_drv_imp_export); 
+      pad_drv.pad_drv_ap.connect(stil_gen.pad_drv_imp_export); 
+      reset_drv.reset_drv_ap.connect(stil_gen.analysis_export); 
 
       agent.mon.jtag_vi = cfg.jtag_vi;
       //agent.drv.jtag_vi = cfg.jtag_vi;

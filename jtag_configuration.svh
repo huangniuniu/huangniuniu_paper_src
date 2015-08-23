@@ -54,4 +54,20 @@ class reset_configuration extends uvm_object;
    bit                       gen_stil_file;
 endclass: reset_configuration
 
+//---------------------------------------------------------------------------
+// Class: pad_configuration
+//---------------------------------------------------------------------------
+
+class pad_configuration extends uvm_object;
+   `uvm_object_utils( pad_configuration )
+
+   function new( string name = "" );
+      super.new( name );
+   endfunction: new
+
+   virtual pad_if          pad_vi;
+
+   bit                       gen_stil_file;
+endclass: pad_configuration
+
 
