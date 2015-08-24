@@ -1,4 +1,23 @@
 //------------------------------------------------------------------------------
+// class:bus_reg_ext 
+//------------------------------------------------------------------------------
+//This class is used to send information from a sequence to the adapter
+class bus_reg_ext extends uvm_object;
+   `uvm_object_utils(bus_reg_ext)
+   bit    chk_ir_tdo; 
+   bit    chk_dr_tdo; 
+   bit    exp_tdo_dr[];
+   bit    exp_tdo_ir[];
+  
+   //store regsiter wr data which larger than 64bits.
+   bit    wr_data[$];
+   function new(string name = "bus_reg_ext");
+     super.new(name);
+   endfunction : new
+    
+endclass : bus_reg_ext
+
+//------------------------------------------------------------------------------
 // class: jtag_transaction
 //------------------------------------------------------------------------------
 class jtag_transaction extends uvm_sequence_item;
@@ -123,22 +142,27 @@ class stil_info_transaction extends uvm_sequence_item;
         super.new(name);
     endfunction
  endclass: stil_info_transaction    
+
 //------------------------------------------------------------------------------
-// class:bus_reg_ext 
+// class: dft_reg_transaction
 //------------------------------------------------------------------------------
-//This class is used to send information from a sequence to the adapter
-class bus_reg_ext extends uvm_object;
-   `uvm_object_utils(bus_reg_ext)
-   bit    chk_ir_tdo; 
-   bit    chk_dr_tdo; 
-   bit    exp_tdo_dr[];
-   bit    exp_tdo_ir[];
-   
-   function new(string name = "bus_reg_ext");
-     super.new(name);
-   endfunction : new
-    
-endclass : bus_reg_ext
+class dft_reg_transaction extends uvm_sequence_item;
+    `uvm_object_utils( dft_reg_transaction )
+      
+    bit                                read_not_write;
+    bit[`DFT_REG_ADDR_WIDTH-1:0]       address;
+    bit                                wr_data[$];
+    bit                                rd_data[$];
+    bus_reg_ext                        extension;
+    unsigned int                       reg_length;
+    function new(string name = "dft_reg_transaction");
+        super.new(name);
+        extension = new("bus_reg_ext", this);
+    endfunction
+
+endclass: dft_reg_transaction    
+
+
 //------------------------------------------------------------------------------
 // class: jtag_monitor
 //------------------------------------------------------------------------------
@@ -1031,6 +1055,75 @@ endclass: jtag_driver_atpg
 // Class: jtag_sequencer
 //---------------------------------------------------------------------------
 typedef uvm_sequencer #(jtag_transaction) jtag_sequencer;
+
+//---------------------------------------------------------------------------
+// Class: dft_reg_sequencer
+//---------------------------------------------------------------------------
+typedef uvm_sequencer #(dft_reg_transaction) dft_reg_sequencer;
+
+//------------------------------------------------------------------------------
+// Class: dft_reg_adapter
+//------------------------------------------------------------------------------
+
+class dft_reg_adapter extends uvm_reg_adapter;
+   `uvm_object_utils( dft_reg_adapter )
+
+   function new( string name = "" );
+      super.new( name );
+      supports_byte_enable = 0;
+      provides_responses   = 0;
+   endfunction: new
+
+   virtual function uvm_sequence_item reg2bus( const ref uvm_reg_bus_op rw );
+      bus_reg_ext             extension;
+      uvm_reg_item            item = get_item();
+      dft_reg_transaction     dft_reg_tx = dft_reg_transaction::type_id::create("dft_reg_tx");
+      unsigned int            ext_wr_data_length;
+      
+      ext_wr_data_length = 0;
+
+      if(!$cast(extension,item.extension))
+         `uvm_error("reg2bus", "Extension casting failed.");
+
+      if( extension != null ) begin
+         dft_reg_tx.extension = extension;
+         ext_wr_data_length = extension.wr_data.size();
+      end
+    
+      dft_reg_tx.address = rw.addr;
+      dft_reg_tx.read_not_write = (rw.kind == UVM_READ);
+
+      if(rw.kind == UVM_WRITE) begin
+         if(ext_wr_data_length == 0) begin
+            for(i=0; i<rw.nbits; i++)  dft_reg_tx.wr_data = {dft_reg_tx.wr_data, rw.data[i]}; 
+            dft_reg_tx.reg_length = rw.nbits;
+         end 
+         else begin
+            for(i=0; i<rw.nbits; i++)  dft_reg_tx.wr_data = {dft_reg_tx.wr_data, rw.data[i]}; 
+            dft_reg_tx.wr_data = {dft_reg_tx.wr_data, extension.wr_data};
+            dft_reg_tx.reg_length = rw.nbits + ext_wr_data_length;
+         end
+      end
+
+      return dft_reg_tx;
+   endfunction: reg2bus
+   
+   //stop here
+   virtual function void bus2reg( uvm_sequence_item bus_item, ref uvm_reg_bus_op rw );
+      dft_reg_transaction  dft_reg_tx;
+      
+      logic queue_comp_rslt = 1;
+      
+      if ( ! $cast( dft_reg_tx, bus_item ) ) begin
+         `uvm_fatal( get_name(), "bus_item is not of the jtag_transaction type." )
+         return;
+      end
+       
+
+   endfunction: bus2reg
+endclass: dft_reg_adapter
+
+
 
 //------------------------------------------------------------------------------
 // Class: ieee_1149_1_reg_adapter
