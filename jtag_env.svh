@@ -151,8 +151,8 @@ class dft_reg_transaction extends uvm_sequence_item;
       
     bit                                read_not_write;
     bit[`DFT_REG_ADDR_WIDTH-1:0]       address;
-    bit                                wr_data[$];
-    bit                                rd_data[$];
+    bit                                wr_data_q[$];
+    bit                                rd_data_q[$];
     bus_reg_ext                        extension;
     unsigned int                       reg_length;
     function new(string name = "dft_reg_transaction");
@@ -1087,7 +1087,7 @@ class dft_reg_adapter extends uvm_reg_adapter;
 
       if( extension != null ) begin
          dft_reg_tx.extension = extension;
-         ext_wr_data_length = extension.wr_data.size();
+         ext_wr_data_length = extension.wr_data_q.size();
       end
     
       dft_reg_tx.address = rw.addr;
@@ -1095,12 +1095,12 @@ class dft_reg_adapter extends uvm_reg_adapter;
 
       if(rw.kind == UVM_WRITE) begin
          if(ext_wr_data_length == 0) begin
-            for(i=0; i<rw.nbits; i++)  dft_reg_tx.wr_data = {dft_reg_tx.wr_data, rw.data[i]}; 
+            for(i=0; i<rw.nbits; i++)  dft_reg_tx.wr_data_q = {dft_reg_tx.wr_data_q, rw.data[i]}; 
             dft_reg_tx.reg_length = rw.nbits;
          end 
          else begin
-            for(i=0; i<rw.nbits; i++)  dft_reg_tx.wr_data = {dft_reg_tx.wr_data, rw.data[i]}; 
-            dft_reg_tx.wr_data = {dft_reg_tx.wr_data, extension.wr_data};
+            for(i=0; i<rw.nbits; i++)  dft_reg_tx.wr_data_q = {dft_reg_tx.wr_data_q, rw.data[i]}; 
+            dft_reg_tx.wr_data_q = {dft_reg_tx.wr_data_q, extension.wr_data_q};
             dft_reg_tx.reg_length = rw.nbits + ext_wr_data_length;
          end
       end
@@ -1108,18 +1108,29 @@ class dft_reg_adapter extends uvm_reg_adapter;
       return dft_reg_tx;
    endfunction: reg2bus
    
-   //stop here
    virtual function void bus2reg( uvm_sequence_item bus_item, ref uvm_reg_bus_op rw );
       dft_reg_transaction  dft_reg_tx;
       
-      logic queue_comp_rslt = 1;
-      
       if ( ! $cast( dft_reg_tx, bus_item ) ) begin
-         `uvm_fatal( get_name(), "bus_item is not of the jtag_transaction type." )
+         `uvm_fatal( get_name(), "bus_item is not of the dft_reg_transaction type." )
          return;
       end
-       
+     
+      rw.kind = (dft_reg_tx.read_not_write == 1) ? UVM_READ : UVM_WRITE;
+      rw.addr = dft_reg_tx.address;
 
+      if(dft_reg_tx.read_not_write == 1) begin
+         //currently only consider register lenght <= 64
+         if(dft_reg_tx.reg_length <= 64)begin
+            foreach(dft_reg_tx.rd_data_q[i]) rw.data[i] = dft_reg_tx.rd_data_q[i]);
+         end
+      end
+      else begin
+         //currently only consider register lenght <= 64
+         if(dft_reg_tx.reg_length <= 64)begin
+            foreach(dft_reg_tx.wr_data_q[i]) rw.data[i] = dft_reg_tx.wr_data_q[i]);
+         end
+      end
    endfunction: bus2reg
 endclass: dft_reg_adapter
 

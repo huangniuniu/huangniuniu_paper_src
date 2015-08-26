@@ -114,4 +114,36 @@ class jtag_wr_sequence extends uvm_reg_sequence;
       write_reg( jtag_reg_block.idcode_reg, status, { idcode, dr_length }, .extension(bus_reg_extension) );
   endtask: body
 endclass: jtag_wr_sequence
+//---------------------------------------------------------------------------
+// Class: dft_reg_tx_to_jtag_tx_sequence
+//---------------------------------------------------------------------------
+   
+class dft_reg_tx_to_jtag_tx_sequence extends uvm_sequence#( jtag_transaction);
+   `uvm_object_utils( dft_reg_tx_to_jtag_tx_sequence )
+
+   function new( string name = "" );
+      super.new( name );
+   endfunction: new
+
+   uvm_sequencer  #(dft_reg_transaction)  up_sequencer;
+   dft_reg_transaction                    dft_reg_tx;
+   jtag_transaction                       jtag_tx_q[$];
+
+   function void dft_reg_tx_to_jtag_tx (dft_reg_transaction dft_reg_tx, ref jtag_transaction jtag_tx_q[$]);
+   endfunction: dft_reg_tx_to_jtag_tx 
+   
+   task body();
+      up_sequencer.get_next_item(dft_reg_tx);
+      dft_reg_tx_to_jtag_tx(dft_reg_tx,jtag_tx_q[$]);
+      foreach(jtag_tx_q[i]) begin
+         start_item( jtag_tx_q[i] );
+         finish_item( jtag_tx_q[i]);
+         `uvm_info( "jtag_tx", { "\n",jtag_tx.convert2string() }, UVM_LOW );
+      end
+      up_sequencer.item_done();
+      jtag_tx_q.delete();
+   endtask: body
+
+endclass: dft_reg_tx_to_jtag_tx_sequence
+
 
