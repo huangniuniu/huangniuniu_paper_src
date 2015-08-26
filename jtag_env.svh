@@ -1,4 +1,22 @@
 //------------------------------------------------------------------------------
+// class:caught_data 
+//------------------------------------------------------------------------------
+//This class is used to store information genrated by 1687 network maintainer.
+class caught_data extends uvm_object;
+   `uvm_object_utils(caught_data)
+   bit                              caught_1149_reg; 
+   bit                              caught_1500_reg; 
+   bit[`DFT_REG_ADDR_WIDTH-1: 0]    reg_addr; 
+   bit                              reg_data_q[$];
+  
+   function new(string name = "caught_data");
+     super.new(name);
+   endfunction : new
+    
+endclass : caught_data
+
+
+//------------------------------------------------------------------------------
 // class:bus_reg_ext 
 //------------------------------------------------------------------------------
 //This class is used to send information from a sequence to the adapter
@@ -162,7 +180,30 @@ class dft_reg_transaction extends uvm_sequence_item;
 
 endclass: dft_reg_transaction    
 
+//------------------------------------------------------------------------------
+// class: dft_reg_monitor
+//------------------------------------------------------------------------------
+class dft_reg_monitor extends uvm_subscriber #(jtag_transaction);
+   `uvm_component_utils( dft_reg_monitor )
 
+   function new( string name, uvm_component parent );
+      super.new( name, parent );
+   endfunction: new
+  
+   uvm_analysis_port #(dft_reg_transaction) dft_reg_ap;
+
+   function void build_phase( uvm_phase phase );
+      super.build_phase( phase );
+      dft_reg_ap = new( .name("dft_reg_ap"), .parent(this) );
+   endfunction: build_phase
+
+   function void write( jtag_transaction t);
+   endfunction: write
+  
+   function void dft_reg_network ( jtag_transaction jtag_tx, ref caught_data cght_data);
+   endfunction: dft_reg_network
+
+endclass:dft_reg_monitor
 //------------------------------------------------------------------------------
 // class: jtag_monitor
 //------------------------------------------------------------------------------
@@ -1255,7 +1296,7 @@ endclass:jtag_agent
 `uvm_analysis_imp_decl(_jtag_drv)
 `uvm_analysis_imp_decl(_clk_drv)
 `uvm_analysis_imp_decl(_pad_drv)
-class stil_generator extends uvm_subscriber#( stil_info_transaction );
+class stil_generator extends uvm_subscriber #( stil_info_transaction );
    `uvm_component_utils( stil_generator )
 
    uvm_analysis_imp_jtag_drv  #(stil_info_transaction, stil_generator) jtag_drv_imp_export;
@@ -1317,7 +1358,98 @@ endclass:jtag_scoreboard
 
 typedef uvm_reg_predictor#( jtag_transaction ) jtag_reg_predictor;
 
+//------------------------------------------------------------------------------
+// Class: dft_reg_predictor
+//------------------------------------------------------------------------------
 
+typedef uvm_reg_predictor#( dft_reg_transaction ) dft_reg_predictor;
+
+//---------------------------------------------------------------------------
+// Class: dft_register_map
+//---------------------------------------------------------------------------
+
+class dft_register_map extends uvm_subscriber#( dft_reg_transaction );
+   `uvm_component_utils( dft_register_map )
+   
+   dft_reg_transaction     dft_reg_tx;
+
+   function new( string name, uvm_component parent );
+      super.new( name, parent );
+   endfunction: new
+
+   function void build_phase( uvm_phase phase );
+      super.build_phase( phase );
+      dft_reg_tx = dft_reg_transaction::type_id::create(.name("dft_reg_tx"));
+   endfunction: build_phase
+
+   function void write( dft_reg_transaction t);
+       dft_reg_tx = t;
+       //`uvm_info("dft_register_map",{"\n",t.sprint(p)},UVM_LOW);
+   endfunction: write
+
+endclass:dft_register_map
+
+//---------------------------------------------------------------------------
+// Class: dft_reg_layering
+//---------------------------------------------------------------------------
+
+class dft_reg_layering extends uvm_subscriber;
+   `uvm_component_utils( dft_reg_layering )
+   
+   function new( string name, uvm_component parent );
+      super.new( name, parent );
+   endfunction: new
+
+   dft_reg_predictor    dft_reg_prdctr;
+   dft_register_map     dft_reg_map;
+   dft_reg_monitor      dft_reg_mon;
+   dft_reg_adapter      dft_reg_adptr;
+   dft_reg_sequencer    dft_reg_sqr;
+   jtag_configuration   jtag_cfg;
+
+   function void build_phase( uvm_phase phase );
+      super.build_phase( phase );
+
+      dft_reg_prdctr = dft_reg_predictor::type_id::create(.name( "dft_reg_prdctr" ), .parent(this));
+      dft_reg_map = dft_register_map::type_id::create(.name( "dft_reg_map" ), .parent(this));
+      dft_reg_mon = dft_reg_monitor::type_id::create(.name( "dft_reg_mon" ), .parent(this));
+      dft_reg_adptr = dft_reg_adapter::type_id::create(.name( "dft_reg_adptr" ), .parent(this));
+      dft_reg_sqr = dft_reg_sequencer::type_id::create(.name( "dft_reg_sqr" ), .parent(this));
+      
+      assert(uvm_config_db#( jtag_configuration)::get ( .cntxt( this ), .inst_name( "*" ), .field_name( "jtag_cfg" ), .value( jtag_cfg) ))
+      else `uvm_fatal("NOVIF", "Failed to get virtual interfaces form uvm_config_db.\n");
+   endfunction: build_phase
+
+   function void connect_phase( uvm_phase phase );
+
+      this.analysis_export.connect(dft_reg_mon.analysis_export);
+
+      dft_reg_mon.dft_reg_ap.connect(dft_reg_map.analysis_export);
+      
+      //dft_reg_prdctr connection
+      dft_reg_mon.dft_reg_ap.connect(dft_reg_prdctr.bus_in);
+      dft_reg_prdctr.adapter = dft_reg_adptr;
+      dft_reg_prdctr.map = dft_reg_adptr;
+      jtag_cfg.reg_block.reg_map.set_sequencer( .sequencer( dft_reg_sqr ), .adapter( dft_reg_adptr) );
+   endfunction: connect_phase
+   
+   virtual task run_phase(uvm_phase phase);
+      dft_reg_tx_to_jtag_tx_sequence         dft_reg_tx_to_jtag_tx_seq;
+
+      dft_reg_tx_to_jtag_tx_seq = dft_reg_tx_to_jtag_tx_sequence::type_id::create("dft_reg_tx_to_jtag_tx_seq");
+
+      // connect translation sequences to their respective upstream sequencers
+      dft_reg_tx_to_jtag_tx_seq.up_sequencer = dft_reg_sqr;
+      
+      // start the translation sequences
+      //stophere
+      fork
+        dft_reg_tx_to_jtag_tx_seq.start(b_sequencer);
+        b2c_seq.start(c_agent.c_sequencer);
+      join_none
+   endtask
+
+endclass:dft_reg_layering
 
 
 //---------------------------------------------------------------------------
@@ -1341,6 +1473,7 @@ class jtag_env extends uvm_env;
    pad_driver           pad_drv;
 
    stil_generator       stil_gen;
+
    function void build_phase( uvm_phase phase );
       super.build_phase( phase );
 	   
@@ -1366,9 +1499,8 @@ class jtag_env extends uvm_env;
 
       agent.mon.jtag_vi = cfg.jtag_vi;
       //agent.drv.jtag_vi = cfg.jtag_vi;
-      cfg.jtag_reg_block.reg_map.set_sequencer( .sequencer( agent.sqr ),
-                                                .adapter( agent.jtag_reg_adapter ) );
-      reg_predictor.map     = cfg.jtag_reg_block.reg_map;
+      cfg.reg_block.reg_map.set_sequencer( .sequencer( agent.sqr ), .adapter( agent.jtag_reg_adapter ) );
+      reg_predictor.map     = cfg.reg_block.reg_map;
       reg_predictor.adapter = agent.jtag_reg_adapter;
       agent.jtag_ap.connect( reg_predictor.bus_in );
    endfunction: connect_phase
