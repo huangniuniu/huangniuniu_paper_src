@@ -1393,7 +1393,7 @@ endclass:dft_register_map
 // Class: dft_reg_layering
 //---------------------------------------------------------------------------
 
-class dft_reg_layering extends uvm_subscriber;
+class dft_reg_layering extends uvm_subscriber #(jtag_transaction);
    `uvm_component_utils( dft_reg_layering )
    
    function new( string name, uvm_component parent );
@@ -1406,7 +1406,8 @@ class dft_reg_layering extends uvm_subscriber;
    dft_reg_adapter      dft_reg_adptr;
    dft_reg_sequencer    dft_reg_sqr;
    jtag_configuration   jtag_cfg;
-
+   jtag_agent           agent;
+   
    function void build_phase( uvm_phase phase );
       super.build_phase( phase );
 
@@ -1442,10 +1443,8 @@ class dft_reg_layering extends uvm_subscriber;
       dft_reg_tx_to_jtag_tx_seq.up_sequencer = dft_reg_sqr;
       
       // start the translation sequences
-      //stophere
       fork
-        dft_reg_tx_to_jtag_tx_seq.start(b_sequencer);
-        b2c_seq.start(c_agent.c_sequencer);
+        dft_reg_tx_to_jtag_tx_seq.start(agent.sqr);
       join_none
    endtask
 
@@ -1467,24 +1466,26 @@ class jtag_env extends uvm_env;
    jtag_agent           agent;
    jtag_scoreboard      scoreboard;
    jtag_configuration   cfg;
-   jtag_reg_predictor   reg_predictor;
+   //jtag_reg_predictor   reg_predictor;
    clk_driver           clk_drv;
    reset_driver         reset_drv;
    pad_driver           pad_drv;
 
    stil_generator       stil_gen;
+   dft_reg_layering     reg_layering;
 
    function void build_phase( uvm_phase phase );
       super.build_phase( phase );
 	   
       agent = jtag_agent::type_id::create           (.name( "agent"      ), .parent(this));
       scoreboard = jtag_scoreboard::type_id::create (.name( "scoreboard" ), .parent(this));
-      reg_predictor = jtag_reg_predictor::type_id::create(.name( "reg_predictor" ), .parent(this));
+      //reg_predictor = jtag_reg_predictor::type_id::create(.name( "reg_predictor" ), .parent(this));
       
       clk_drv = clk_driver::type_id::create(.name( "clk_drv" ), .parent(this));
       reset_drv = reset_driver::type_id::create(.name( "reset_drv" ), .parent(this));
       pad_drv = pad_driver::type_id::create(.name( "pad_drv" ), .parent(this));
       stil_gen = stil_generator::type_id::create(.name( "stil_gen" ), .parent(this));
+      reg_layering = dft_reg_layering::type_id::create(.name( "reg_layering" ), .parent(this));
       
       assert(uvm_config_db#( jtag_configuration)::get ( .cntxt( this ), .inst_name( "*" ), .field_name( "jtag_cfg" ), .value( cfg) ))
       else `uvm_fatal("NOVIF", "Failed to get virtual interfaces form uvm_config_db.\n");
@@ -1499,10 +1500,14 @@ class jtag_env extends uvm_env;
 
       agent.mon.jtag_vi = cfg.jtag_vi;
       //agent.drv.jtag_vi = cfg.jtag_vi;
-      cfg.reg_block.reg_map.set_sequencer( .sequencer( agent.sqr ), .adapter( agent.jtag_reg_adapter ) );
-      reg_predictor.map     = cfg.reg_block.reg_map;
-      reg_predictor.adapter = agent.jtag_reg_adapter;
+      //cfg.reg_block.reg_map.set_sequencer( .sequencer( agent.sqr ), .adapter( agent.jtag_reg_adapter ) );
+      //reg_predictor.map     = cfg.reg_block.reg_map;
+      //reg_predictor.adapter = agent.jtag_reg_adapter;
       agent.jtag_ap.connect( reg_predictor.bus_in );
+      
+      reg_layering.agent = agent;
+      agent.jtag_ap.connect(reg_layering.analysis_export);
+
    endfunction: connect_phase
 
 endclass:jtag_env
