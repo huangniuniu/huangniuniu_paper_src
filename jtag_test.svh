@@ -15,7 +15,7 @@ class jtag_base_test extends uvm_test;
    pad_configuration        pad_cfg;
    //jtag_env               jtag_env;
    jtag_env                 env;
-   ieee1149_1_reg_block     jtag_reg_block; 
+   dft_register_block     dft_reg_block; 
 
    function void build_phase( uvm_phase phase );
       super.build_phase( phase );
@@ -27,10 +27,10 @@ class jtag_base_test extends uvm_test;
 
       env = jtag_env::type_id::create( .name( "env" ), .parent( this ) );
 
-      jtag_reg_block = ieee1149_1_reg_block::type_id::create( .name("jtag_reg_block"), .parent( this ));
-      jtag_reg_block.build();
+      dft_reg_block = dft_register_block::type_id::create( .name("dft_reg_block"), .parent( this ));
+      dft_reg_block.build();
     
-      jtag_cfg.jtag_reg_block = jtag_reg_block;
+      jtag_cfg.reg_block = dft_reg_block;
       assert(uvm_config_db#( virtual jtag_if )::get ( .cntxt( this ), .inst_name( "*" ), .field_name( "jtag_if" ), .value( jtag_cfg.jtag_vi) ))
       else `uvm_fatal("NOVIF", "Failed to get virtual interfaces form uvm_config_db.\n");
 
@@ -98,8 +98,8 @@ class jtag_1149_1_test extends jtag_base_test;
       phase.raise_objection( .obj( this ), .description( "start of test" ));
 
       jtag_reg_seq = atpg_try_sequence::type_id::create( "jtag_reg_seq" );
-      jtag_reg_seq.model = jtag_reg_block;
-      jtag_reg_seq.start( .sequencer( env.agent.sqr ) );
+      jtag_reg_seq.model = dft_reg_block;
+      jtag_reg_seq.start( .sequencer( env.reg_layering.dft_reg_sqr) );
       
       phase.drop_objection( .obj( this ), .description( "end of test" ));
    endtask: main_phase

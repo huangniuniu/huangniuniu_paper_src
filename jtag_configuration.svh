@@ -11,7 +11,7 @@ class jtag_configuration extends uvm_object;
 
    virtual jtag_if          jtag_vi;
 
-   dft_reg_block            reg_block;
+   dft_register_block       reg_block;
 
    bit                      gen_stil_file;
    string                   stil_file_name;

@@ -24,11 +24,11 @@ class bus_reg_ext extends uvm_object;
    `uvm_object_utils(bus_reg_ext)
    bit    chk_ir_tdo; 
    bit    chk_dr_tdo; 
-   bit    exp_tdo_dr[];
-   bit    exp_tdo_ir[];
+   bit    exp_tdo_dr_q[$];
+   bit    exp_tdo_ir_q[$];
   
    //store regsiter wr data which larger than 64bits.
-   bit    wr_data[$];
+   bit    wr_data_q[$];
    function new(string name = "bus_reg_ext");
      super.new(name);
    endfunction : new
@@ -41,9 +41,10 @@ endclass : bus_reg_ext
 class jtag_transaction extends uvm_sequence_item;
     rand  protocol_e                 protocol;
 
-    rand  bit [`IR_WIDTH-1:0]        o_ir;
+    bit                              o_ir[];
 
     rand  int unsigned               o_dr_length;
+    rand  int unsigned               o_ir_length;
     bit                              o_dr[];
     //rand  bit [o_dr_length-1:0]      o_dr;
     
@@ -59,12 +60,16 @@ class jtag_transaction extends uvm_sequence_item;
     bit                              chk_ir_tdo;
     bit                              chk_dr_tdo;
     bit                              exp_tdo_dr_queue[$];
+    bit                              exp_tdo_dr_mask_queue[$];
     bit                              exp_tdo_ir_queue[$];
+    
+    rand  bit                        read_not_write;
     `uvm_object_utils( jtag_transaction )
     
     function new(string name = "jtag_transaction");
         super.new(name);
         o_dr = new[ o_dr_length ];
+        o_ir = new[ o_ir_length ];
 
     endfunction
     
@@ -73,11 +78,18 @@ class jtag_transaction extends uvm_sequence_item;
        o_dr_length <= 64;
     }
     
+    constraint o_ir_length_c { 
+       o_ir_length = 8;
+    }
+
     function void post_randomize;
         o_dr = new[ o_dr_length ];
+        o_ir = new[ o_ir_length ];
         
         foreach( o_dr[i] )
             o_dr[i] = $urandom;
+        foreach( o_ir[i] )
+            o_ir[i] = $urandom;
     endfunction: post_randomize
     
     function string convert2string();
@@ -162,35 +174,35 @@ class stil_info_transaction extends uvm_sequence_item;
  endclass: stil_info_transaction    
 
 //------------------------------------------------------------------------------
-// class: dft_reg_transaction
+// class: dft_register_transaction
 //------------------------------------------------------------------------------
-class dft_reg_transaction extends uvm_sequence_item;
-    `uvm_object_utils( dft_reg_transaction )
+class dft_register_transaction extends uvm_sequence_item;
+    `uvm_object_utils( dft_register_transaction )
       
     bit                                read_not_write;
     bit[`DFT_REG_ADDR_WIDTH-1:0]       address;
     bit                                wr_data_q[$];
     bit                                rd_data_q[$];
     bus_reg_ext                        extension;
-    unsigned int                       reg_length;
-    function new(string name = "dft_reg_transaction");
+    int unsigned                       reg_length;
+    function new(string name = "dft_register_transaction");
         super.new(name);
-        extension = new("bus_reg_ext", this);
+        extension = new("extension");
     endfunction
 
-endclass: dft_reg_transaction    
+endclass: dft_register_transaction    
 
 //------------------------------------------------------------------------------
-// class: dft_reg_monitor
+// class: dft_register_monitor
 //------------------------------------------------------------------------------
-class dft_reg_monitor extends uvm_subscriber #(jtag_transaction);
-   `uvm_component_utils( dft_reg_monitor )
+class dft_register_monitor extends uvm_subscriber #(jtag_transaction);
+   `uvm_component_utils( dft_register_monitor )
 
    function new( string name, uvm_component parent );
       super.new( name, parent );
    endfunction: new
   
-   uvm_analysis_port #(dft_reg_transaction) dft_reg_ap;
+   uvm_analysis_port #(dft_register_transaction) dft_reg_ap;
 
    function void build_phase( uvm_phase phase );
       super.build_phase( phase );
@@ -203,7 +215,7 @@ class dft_reg_monitor extends uvm_subscriber #(jtag_transaction);
    function void dft_reg_network ( jtag_transaction jtag_tx, ref caught_data cght_data);
    endfunction: dft_reg_network
 
-endclass:dft_reg_monitor
+endclass:dft_register_monitor
 //------------------------------------------------------------------------------
 // class: jtag_monitor
 //------------------------------------------------------------------------------
@@ -1098,16 +1110,16 @@ endclass: jtag_driver_atpg
 typedef uvm_sequencer #(jtag_transaction) jtag_sequencer;
 
 //---------------------------------------------------------------------------
-// Class: dft_reg_sequencer
+// Class: dft_register_sequencer
 //---------------------------------------------------------------------------
-typedef uvm_sequencer #(dft_reg_transaction) dft_reg_sequencer;
+typedef uvm_sequencer #(dft_register_transaction) dft_register_sequencer;
 
 //------------------------------------------------------------------------------
-// Class: dft_reg_adapter
+// Class: dft_register_adapter
 //------------------------------------------------------------------------------
 
-class dft_reg_adapter extends uvm_reg_adapter;
-   `uvm_object_utils( dft_reg_adapter )
+class dft_register_adapter extends uvm_reg_adapter;
+   `uvm_object_utils( dft_register_adapter )
 
    function new( string name = "" );
       super.new( name );
@@ -1116,10 +1128,10 @@ class dft_reg_adapter extends uvm_reg_adapter;
    endfunction: new
 
    virtual function uvm_sequence_item reg2bus( const ref uvm_reg_bus_op rw );
-      bus_reg_ext             extension;
-      uvm_reg_item            item = get_item();
-      dft_reg_transaction     dft_reg_tx = dft_reg_transaction::type_id::create("dft_reg_tx");
-      unsigned int            ext_wr_data_length;
+      bus_reg_ext                   extension;
+      uvm_reg_item                  item = get_item();
+      dft_register_transaction      dft_reg_tx = dft_register_transaction::type_id::create("dft_reg_tx");
+      int unsigned                  ext_wr_data_length;
       
       ext_wr_data_length = 0;
 
@@ -1136,13 +1148,13 @@ class dft_reg_adapter extends uvm_reg_adapter;
 
       if(rw.kind == UVM_WRITE) begin
          if(ext_wr_data_length == 0) begin
-            for(i=0; i<rw.nbits; i++)  dft_reg_tx.wr_data_q = {dft_reg_tx.wr_data_q, rw.data[i]}; 
-            dft_reg_tx.reg_length = rw.nbits;
+            for(int i=0; i<rw.n_bits; i++)  dft_reg_tx.wr_data_q = {dft_reg_tx.wr_data_q, rw.data[i]}; 
+            dft_reg_tx.reg_length = rw.n_bits;
          end 
          else begin
-            for(i=0; i<rw.nbits; i++)  dft_reg_tx.wr_data_q = {dft_reg_tx.wr_data_q, rw.data[i]}; 
+            for(int i=0; i<rw.n_bits; i++)  dft_reg_tx.wr_data_q = {dft_reg_tx.wr_data_q, rw.data[i]}; 
             dft_reg_tx.wr_data_q = {dft_reg_tx.wr_data_q, extension.wr_data_q};
-            dft_reg_tx.reg_length = rw.nbits + ext_wr_data_length;
+            dft_reg_tx.reg_length = rw.n_bits + ext_wr_data_length;
          end
       end
 
@@ -1150,10 +1162,10 @@ class dft_reg_adapter extends uvm_reg_adapter;
    endfunction: reg2bus
    
    virtual function void bus2reg( uvm_sequence_item bus_item, ref uvm_reg_bus_op rw );
-      dft_reg_transaction  dft_reg_tx;
+      dft_register_transaction  dft_reg_tx;
       
       if ( ! $cast( dft_reg_tx, bus_item ) ) begin
-         `uvm_fatal( get_name(), "bus_item is not of the dft_reg_transaction type." )
+         `uvm_fatal( get_name(), "bus_item is not of the dft_register_transaction type." )
          return;
       end
      
@@ -1163,17 +1175,17 @@ class dft_reg_adapter extends uvm_reg_adapter;
       if(dft_reg_tx.read_not_write == 1) begin
          //currently only consider register lenght <= 64
          if(dft_reg_tx.reg_length <= 64)begin
-            foreach(dft_reg_tx.rd_data_q[i]) rw.data[i] = dft_reg_tx.rd_data_q[i]);
+            foreach(dft_reg_tx.rd_data_q[i]) rw.data[i] = dft_reg_tx.rd_data_q[i];
          end
       end
       else begin
          //currently only consider register lenght <= 64
          if(dft_reg_tx.reg_length <= 64)begin
-            foreach(dft_reg_tx.wr_data_q[i]) rw.data[i] = dft_reg_tx.wr_data_q[i]);
+            foreach(dft_reg_tx.wr_data_q[i]) rw.data[i] = dft_reg_tx.wr_data_q[i];
          end
       end
    endfunction: bus2reg
-endclass: dft_reg_adapter
+endclass: dft_register_adapter
 
 
 
@@ -1359,19 +1371,19 @@ endclass:jtag_scoreboard
 typedef uvm_reg_predictor#( jtag_transaction ) jtag_reg_predictor;
 
 //------------------------------------------------------------------------------
-// Class: dft_reg_predictor
+// Class: dft_register_predictor
 //------------------------------------------------------------------------------
 
-typedef uvm_reg_predictor#( dft_reg_transaction ) dft_reg_predictor;
+typedef uvm_reg_predictor#( dft_register_transaction ) dft_register_predictor;
 
 //---------------------------------------------------------------------------
 // Class: dft_register_map
 //---------------------------------------------------------------------------
 
-class dft_register_map extends uvm_subscriber#( dft_reg_transaction );
+class dft_register_map extends uvm_subscriber#( dft_register_transaction );
    `uvm_component_utils( dft_register_map )
    
-   dft_reg_transaction     dft_reg_tx;
+   dft_register_transaction     dft_reg_tx;
 
    function new( string name, uvm_component parent );
       super.new( name, parent );
@@ -1379,10 +1391,10 @@ class dft_register_map extends uvm_subscriber#( dft_reg_transaction );
 
    function void build_phase( uvm_phase phase );
       super.build_phase( phase );
-      dft_reg_tx = dft_reg_transaction::type_id::create(.name("dft_reg_tx"));
+      dft_reg_tx = dft_register_transaction::type_id::create(.name("dft_reg_tx"));
    endfunction: build_phase
 
-   function void write( dft_reg_transaction t);
+   function void write( dft_register_transaction t);
        dft_reg_tx = t;
        //`uvm_info("dft_register_map",{"\n",t.sprint(p)},UVM_LOW);
    endfunction: write
@@ -1390,32 +1402,212 @@ class dft_register_map extends uvm_subscriber#( dft_reg_transaction );
 endclass:dft_register_map
 
 //---------------------------------------------------------------------------
-// Class: dft_reg_layering
+// Class: dft_reg_tx_to_jtag_tx_sequence
+//---------------------------------------------------------------------------
+   
+class dft_reg_tx_to_jtag_tx_sequence extends uvm_sequence#( jtag_transaction);
+   `uvm_object_utils( dft_reg_tx_to_jtag_tx_sequence )
+
+   function new( string name = "" );
+      super.new( name );
+   endfunction: new
+
+   uvm_sequencer  #(dft_register_transaction)   up_sequencer;
+   dft_register_transaction                     dft_reg_tx;
+   jtag_transaction                             jtag_tx_q[$];
+   
+   //Currently does not consider keep sib status after each register r/w. It will be enhanced later to save test times.
+   //support check function has not implemented.
+   function void dft_reg_tx_to_jtag_tx (dft_register_transaction dft_reg_tx, ref jtag_transaction jtag_tx_q[$]);
+       
+      bit[`SIB_WIDTH-1:0]                          sib; 
+      bit[`LVL1SIB_WIDTH-1:0]                      lvl1_sib; 
+      bit[`LVL2SIB_WIDTH-1:0]                      lvl2_sib; 
+      bit[`IEEE_1500_IR_WIDTH-1:0]                 wir = `SUB_CLIENT_SIB_OPCODE; 
+      bit[`IEEE_1149_IR_WIDTH-1:0]                 ir = `I1687_OPCODE; 
+      bit                                          sel_wir,sel_wir_2nd; 
+      bit                                          temp_dr_q[$]; 
+
+      jtag_tx = jtag_transaction::type_id::create( .name("jtag_tx") );
+      sib = dft_reg_tx.address[`SIB_WIDTH-1:0];
+      lvl1_sib = sib[`LVL1SIB_WIDTH-1:0]; 
+      lvl2_sib = sib[`LVL2SIB_WIDTH-1:`LVL1SIB_WIDTH]; 
+      //-----------------------------------
+      //1149 TDR
+      //-----------------------------------
+      if(sib == `SIB_WIDTH'h0) begin
+         jtag_tx_q[0] = jtag_transaction::type_id::create( .name("jtag_tx_q[0]") );
+         jtag_tx_q[0].read_not_write = dft_reg_tx.read_not_write;
+         jtag_tx_q[0].o_ir_length = `IEEE_1149_IR_WIDTH;
+         jtag_tx_q[0].o_ir = new[jtag_tx_q[0].o_ir_length];
+         foreach(jtag_tx_q[0].o_ir[i])jtag_tx_q[0].o_ir[i] = dft_reg_tx.address[`SIB_WIDTH+i];
+
+         jtag_tx_q[0].o_dr_length = dft_reg_tx.reg_length;
+         jtag_tx_q[0].o_dr = new[jtag_tx_q[0].o_dr_length];
+         foreach(jtag_tx_q[0].o_dr[i])jtag_tx_q[0].o_dr[i] = dft_reg_tx.wr_data_q[i];
+
+         jtag_tx_q[0].chk_ir_tdo       = dft_reg_tx.extension.chk_ir_tdo;
+         jtag_tx_q[0].chk_dr_tdo       = dft_reg_tx.extension.chk_dr_tdo;
+         jtag_tx_q[0].exp_tdo_dr_queue = dft_reg_tx.extension.exp_tdo_dr_q; 
+         jtag_tx_q[0].exp_tdo_dr_mask_queue = {jtag_tx_q[0].o_dr_length{1'b1}}; 
+         jtag_tx_q[0].exp_tdo_ir_queue = dft_reg_tx.extension.exp_tdo_ir_q; 
+         end
+      end//if(dft_reg_tx.address[`SIB_WIDTH-1:0] == `SIB_WIDTH'h0) begin
+      //-----------------------------------
+      //1500 TDR 
+      //-----------------------------------
+      else begin
+         //step1 open sib
+         jtag_tx.o_ir_length = `IEEE_1149_IR_WIDTH;
+         jtag_tx.o_ir = new[jtag_tx.o_ir_length];
+         foreach(jtag_tx.o_ir[i]) jtag_tx.o_ir[i] = ir[i];
+
+         jtag_tx.o_dr_length = `I1687_LENGTH;
+         jtag_tx.o_dr = new[jtag_tx.o_dr_length];
+         for(int i=0; i<`LVL1SIB_WIDTH; i++) jtag_tx.o_dr[i] = lvl1_sib[i];
+         
+         jtag_tx_q[0] = jtag_transaction::type_id::create("jtag_tx_q[0]");
+         $cast(jtag_tx_q[0], jtag_tx.clone()); 
+         
+         jtag_tx.o_dr.delete(); 
+
+         //step2: load user wir or `SUB_CLIENT_SIB_OPCODE
+         sel_wir = 1'b0;
+         
+         jtag_tx.o_dr_length = `I1687_LENGTH + `IEEE_1500_IR_WIDTH + 1;
+         jtag_tx.o_dr = new[jtag_tx.o_dr_length];
+         case(lvl1_sib)
+            `LVL1SIB_WIDTH'b01:begin
+               temp_dr_q = {lvl1_sib[0],sel_wir};
+               //load SUB_CLIENT_SIB_OPCODE WIR
+               if(lvl2_sib!=0) temp_dr_q = {temp_dr_q,`SUB_CLIENT_SIB_OPCODE,lvl1_sib[1]};
+               //load user WIR
+               else temp_dr_q = {temp_dr_q,dft_reg_tx[`IEEE_1500_IR_WIDTH+`SIB_WIDTH-1:`SIB_WIDTH],lvl1_sib[1]};
+            end
+            `LVL1SIB_WIDTH'b10:begin
+               //load user WIR
+               temp_dr_q = {lvl1_sib,sel_wir,dft_reg_tx[`IEEE_1500_IR_WIDTH+`SIB_WIDTH-1:`SIB_WIDTH]};
+            end
+         endcase
+         foreach(temp_dr_q[i])jtag_tx.o_dr[i] = temp_dr_q[i];
+         jtag_tx_q[1] = jtag_transaction::type_id::create("jtag_tx_q[1]");
+         $cast(jtag_tx_q[1], jtag_tx.clone()); 
+         
+         jtag_tx.o_dr.delete(); 
+         temp_dr_q.delete(); 
+         
+         //step3: load wdr or  2nd level sib
+         if(lvl2_sib!=0)begin
+            jtag_tx.o_dr_length = `I1687_LENGTH + `LVL2SIB_WIDTH + 1;
+            jtag_tx.o_dr = new[jtag_tx.o_dr_length];
+
+            sel_wir = 0;
+            temp_dr_q = {lvl1_sib[0],sel_wir,lvl2_sib,lvl1_sib[1]};
+         end
+         else begin
+            jtag_tx.o_dr_length = `I1687_LENGTH + dft_reg_tx.reg_length + 1;
+            jtag_tx.o_dr = new[jtag_tx.o_dr_length];
+            
+            sel_wir = 1'b1;
+            case(lvl1_sib)
+               `LVL1SIB_WIDTH'b01:temp_dr_q = {1'b0,sel_wir,dft_reg_tx.wr_data_q,1'b0};
+               `LVL1SIB_WIDTH'b10:temp_dr_q = {2'b0,sel_wir,dft_reg_tx.wr_data_q};
+            endcase
+         end
+
+         foreach(temp_dr_q[i])jtag_tx.o_dr[i] = temp_dr_q[i];
+         jtag_tx_q[2] = jtag_transaction::type_id::create("jtag_tx_q[2]");
+         $cast(jtag_tx_q[2], jtag_tx.clone()); 
+         
+         temp_dr_q.delete(); 
+         jtag_tx.o_dr.delete(); 
+         
+         //step4 write 2nd level user WIR then WDR
+         if(lvl2_sib!=0)begin
+            //load 2nd levle WIR
+            jtag_tx.o_dr_length = `I1687_LENGTH + `IEEE_1500_IR_WIDTH + 1 + 1 +`LVL2SIB_WIDTH;
+            jtag_tx.o_dr = new[jtag_tx.o_dr_length];
+
+            sel_wir = 0;
+            sel_wir_2nd = 0;
+            case(lvl2_sib)
+               `LVL2SIB_WIDTH'b01: temp_dr_q = {lvl1_sib[0],sel_wir,lvl2_sib[0],sel_wir_2nd,dft_reg_tx.address[`IEEE_1500_IR_WIDTH+`SIB_WIDTH-1:`SIB_WIDTH],lvl2_sib[1],lvl1_sib[1]};
+               `LVL2SIB_WIDTH'b10: temp_dr_q = {lvl1_sib[0],sel_wir,lvl2_sib,sel_wir_2nd,dft_reg_tx.address[`IEEE_1500_IR_WIDTH+`SIB_WIDTH-1:`SIB_WIDTH],lvl1_sib[1]};
+            endcase
+            foreach(temp_dr_q[i])jtag_tx.o_dr[i] = temp_dr_q[i];
+            jtag_tx_q[3] = jtag_transaction::type_id::create("jtag_tx_q[3]");
+            $cast(jtag_tx_q[3], jtag_tx.clone()); 
+            
+            temp_dr_q.delete(); 
+            jtag_tx.o_dr.delete(); 
+            
+            //load 2nd levle WDR
+            jtag_tx.o_dr_length = `I1687_LENGTH + dft_reg_tx.reg_length + 1 + 1 +`LVL2SIB_WIDTH;
+            jtag_tx.o_dr = new[jtag_tx.o_dr_length];
+            
+            sel_wir = 1;
+            sel_wir_2nd = 1;
+            case(lvl2_sib)
+               `LVL2SIB_WIDTH'b01: temp_dr_q = {1'b0,sel_wir,1'b0,sel_wir_2nd,dft_reg_tx.wr_data_q,1'b0,1'b0};
+               `LVL2SIB_WIDTH'b10: temp_dr_q = {1'b0,sel_wir,1'b0,1'b0,sel_wir_2nd,dft_reg_tx.wr_data_q,1'b0};
+            endcase
+            foreach(temp_dr_q[i])jtag_tx.o_dr[i] = temp_dr_q[i];
+            jtag_tx_q[4] = jtag_transaction::type_id::create("jtag_tx_q[4]");
+            $cast(jtag_tx_q[4], jtag_tx.clone()); 
+            
+            temp_dr_q.delete(); 
+            jtag_tx.o_dr.delete(); 
+         end//2nd level WIR or WDR write
+      end//if!(dft_reg_tx.address[`SIB_WIDTH-1:0] == `SIB_WIDTH'h0) begin
+      
+      foreach(jtag_tx_q[i]) jtag_tx_q[i].read_not_write = dft_reg_tx.read_not_write;
+   endfunction: dft_reg_tx_to_jtag_tx 
+  
+   task body();
+      up_sequencer.get_next_item(dft_reg_tx);
+      dft_reg_tx_to_jtag_tx(dft_reg_tx,jtag_tx_q);
+      foreach(jtag_tx_q[i]) begin
+         start_item( jtag_tx_q[i] );
+         finish_item( jtag_tx_q[i]);
+         `uvm_info( "jtag_tx", { "\n",jtag_tx_q[i].convert2string() }, UVM_LOW );
+      end
+      up_sequencer.item_done();
+      jtag_tx_q.delete();
+   endtask: body
+
+endclass: dft_reg_tx_to_jtag_tx_sequence
+
+
+
+//---------------------------------------------------------------------------
+// Class: dft_register_layering
 //---------------------------------------------------------------------------
 
-class dft_reg_layering extends uvm_subscriber #(jtag_transaction);
-   `uvm_component_utils( dft_reg_layering )
+class dft_register_layering extends uvm_scoreboard;
+   `uvm_component_utils( dft_register_layering )
    
    function new( string name, uvm_component parent );
       super.new( name, parent );
    endfunction: new
 
-   dft_reg_predictor    dft_reg_prdctr;
-   dft_register_map     dft_reg_map;
-   dft_reg_monitor      dft_reg_mon;
-   dft_reg_adapter      dft_reg_adptr;
-   dft_reg_sequencer    dft_reg_sqr;
+   uvm_analysis_port #(jtag_transaction) jtag_ap;
+   
+   dft_register_predictor    dft_reg_prdctr;
+   dft_register_map          dft_reg_map;
+   dft_register_monitor      dft_reg_mon;
+   dft_register_adapter      dft_reg_adptr;
+   dft_register_sequencer    dft_reg_sqr;
    jtag_configuration   jtag_cfg;
    jtag_agent           agent;
    
    function void build_phase( uvm_phase phase );
       super.build_phase( phase );
 
-      dft_reg_prdctr = dft_reg_predictor::type_id::create(.name( "dft_reg_prdctr" ), .parent(this));
+      dft_reg_prdctr = dft_register_predictor::type_id::create(.name( "dft_reg_prdctr" ), .parent(this));
       dft_reg_map = dft_register_map::type_id::create(.name( "dft_reg_map" ), .parent(this));
-      dft_reg_mon = dft_reg_monitor::type_id::create(.name( "dft_reg_mon" ), .parent(this));
-      dft_reg_adptr = dft_reg_adapter::type_id::create(.name( "dft_reg_adptr" ), .parent(this));
-      dft_reg_sqr = dft_reg_sequencer::type_id::create(.name( "dft_reg_sqr" ), .parent(this));
+      dft_reg_mon = dft_register_monitor::type_id::create(.name( "dft_reg_mon" ), .parent(this));
+      dft_reg_adptr = dft_register_adapter::type_id::create(.name( "dft_reg_adptr" ), .parent(this));
+      dft_reg_sqr = dft_register_sequencer::type_id::create(.name( "dft_reg_sqr" ), .parent(this));
       
       assert(uvm_config_db#( jtag_configuration)::get ( .cntxt( this ), .inst_name( "*" ), .field_name( "jtag_cfg" ), .value( jtag_cfg) ))
       else `uvm_fatal("NOVIF", "Failed to get virtual interfaces form uvm_config_db.\n");
@@ -1423,14 +1615,14 @@ class dft_reg_layering extends uvm_subscriber #(jtag_transaction);
 
    function void connect_phase( uvm_phase phase );
 
-      this.analysis_export.connect(dft_reg_mon.analysis_export);
+      this.jtag_ap.connect(dft_reg_mon.analysis_export);
 
       dft_reg_mon.dft_reg_ap.connect(dft_reg_map.analysis_export);
       
       //dft_reg_prdctr connection
       dft_reg_mon.dft_reg_ap.connect(dft_reg_prdctr.bus_in);
       dft_reg_prdctr.adapter = dft_reg_adptr;
-      dft_reg_prdctr.map = dft_reg_adptr;
+      dft_reg_prdctr.map = jtag_cfg.reg_block.reg_map;
       jtag_cfg.reg_block.reg_map.set_sequencer( .sequencer( dft_reg_sqr ), .adapter( dft_reg_adptr) );
    endfunction: connect_phase
    
@@ -1448,8 +1640,7 @@ class dft_reg_layering extends uvm_subscriber #(jtag_transaction);
       join_none
    endtask
 
-endclass:dft_reg_layering
-
+endclass:dft_register_layering
 
 //---------------------------------------------------------------------------
 // Class: jtag_env
@@ -1472,7 +1663,7 @@ class jtag_env extends uvm_env;
    pad_driver           pad_drv;
 
    stil_generator       stil_gen;
-   dft_reg_layering     reg_layering;
+   dft_register_layering     reg_layering;
 
    function void build_phase( uvm_phase phase );
       super.build_phase( phase );
@@ -1485,7 +1676,7 @@ class jtag_env extends uvm_env;
       reset_drv = reset_driver::type_id::create(.name( "reset_drv" ), .parent(this));
       pad_drv = pad_driver::type_id::create(.name( "pad_drv" ), .parent(this));
       stil_gen = stil_generator::type_id::create(.name( "stil_gen" ), .parent(this));
-      reg_layering = dft_reg_layering::type_id::create(.name( "reg_layering" ), .parent(this));
+      reg_layering = dft_register_layering::type_id::create(.name( "reg_layering" ), .parent(this));
       
       assert(uvm_config_db#( jtag_configuration)::get ( .cntxt( this ), .inst_name( "*" ), .field_name( "jtag_cfg" ), .value( cfg) ))
       else `uvm_fatal("NOVIF", "Failed to get virtual interfaces form uvm_config_db.\n");
@@ -1503,11 +1694,12 @@ class jtag_env extends uvm_env;
       //cfg.reg_block.reg_map.set_sequencer( .sequencer( agent.sqr ), .adapter( agent.jtag_reg_adapter ) );
       //reg_predictor.map     = cfg.reg_block.reg_map;
       //reg_predictor.adapter = agent.jtag_reg_adapter;
-      agent.jtag_ap.connect( reg_predictor.bus_in );
+      //agent.jtag_ap.connect( reg_predictor.bus_in );
       
       reg_layering.agent = agent;
-      agent.jtag_ap.connect(reg_layering.analysis_export);
+      agent.jtag_ap.connect(reg_layering.jtag_ap);
 
    endfunction: connect_phase
 
 endclass:jtag_env
+
