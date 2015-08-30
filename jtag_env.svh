@@ -1,3 +1,35 @@
+//---------------------------------------------------------------------------
+// Class: sib_node 
+//---------------------------------------------------------------------------
+class sib_node extends uvm_object;
+   `uvm_object_utils(sib_node)
+   bit    in0; 
+   bit    in1; 
+   bit    value = value ? in1 : in0;
+   bit    out = value; 
+   
+   function new(string name = "sib_node");
+     super.new(name);
+   endfunction : new
+    
+endclass : sib_node
+
+//---------------------------------------------------------------------------
+// Class: reg_node 
+//---------------------------------------------------------------------------
+class reg_node extends uvm_object;
+   `uvm_object_utils(reg_node)
+   bit    in; 
+   bit    is_selwir; 
+   bit    value = in;
+   bit    out = value;
+   
+   function new(string name = "reg_node");
+     super.new(name);
+   endfunction : new
+    
+endclass : reg_node
+
 //------------------------------------------------------------------------------
 // class:caught_data 
 //------------------------------------------------------------------------------
@@ -79,7 +111,7 @@ class jtag_transaction extends uvm_sequence_item;
     }
     
     constraint o_ir_length_c { 
-       o_ir_length = 8;
+       o_ir_length == 8;
     }
 
     function void post_randomize;
@@ -197,24 +229,275 @@ endclass: dft_register_transaction
 //------------------------------------------------------------------------------
 class dft_register_monitor extends uvm_subscriber #(jtag_transaction);
    `uvm_component_utils( dft_register_monitor )
-
+   
+   uvm_analysis_port #(dft_register_transaction) dft_reg_ap;
+  
+   dft_register_transaction         dft_reg_tx;
+   bit[`DFT_REG_ADDR_WIDTH-1:0]     temp_ir;
+   bit                              temp_dr_q[$];
+   sib_node                         sib[`SIB_WIDTH];
+   reg_node                         sel_wir[`SIB_WIDTH];
+   reg_node                         wir[`IEEE_1500_IR_WIDTH], wdr_dynmc[]; 
+   reg_node                         cascd_wir[`IEEE_1500_IR_WIDTH], cascd_wdr_dynmc[];
+   string                           temp_name;
+   
    function new( string name, uvm_component parent );
       super.new( name, parent );
    endfunction: new
-  
-   uvm_analysis_port #(dft_register_transaction) dft_reg_ap;
 
    function void build_phase( uvm_phase phase );
       super.build_phase( phase );
       dft_reg_ap = new( .name("dft_reg_ap"), .parent(this) );
+
+      for(int i=0; i<`SIB_WIDTH; i++) begin
+         temp_name = $sformatf("sib_%0d",i);
+         sib[0] = sib_node::type_id::create::("sib0");
+         sel_wir[i] = reg_node::type_id::create::("sel_wir[i]");
+      end
+      
+      for(int i=0; i<`IEEE_1500_IR_WIDTH; i++) begin
+         wir[i] = reg_node::type_id::create::("wir[i]");
+         cascd_wir[i] = reg_node::type_id::create::("cascd_wir[i]");
+      end
+      
+      node_initialize();
    endfunction: build_phase
 
    function void write( jtag_transaction t);
+      if(t.read_not_write)begin
+         foreach(t.tdo_ir_queue[i]) begin
+            temp_ir[i] = t.tdo_ir_queue[i]; 
+            temp_dr_q  = t.tdo_dr_queue;
+         end
+      end
+      else begin
+         foreach(t.tdi_ir_queue[i]) begin
+            temp_ir[i] = t.tdi_ir_queue[i]; 
+            temp_dr_q  = t.tdi_dr_queue;
+         end
+      end
+      
+      if(temp_ir == `I1687_OPCODE) begin
+         for(int i=0; i<t.o_dr_length; i++)begin
+            if(dft_tdr_network(t,i,temp_dr_q[i],cght_data)) begin
+
+               dft_reg_tx = dft_register_transaction::type_id::create("dft_reg_tx");
+               
+               dft_reg_tx.read_not_write = t.read_not_write;
+               dft_reg_tx.address = cght_data.reg_addr;
+               
+               if(t.read_not_write) begin
+                  dft_reg_tx.rd_data_q = cght_data.reg_data_q;
+                  dft_reg_tx.reg_length = cght_data.reg_data_q.size();
+               end
+               else begin
+                  dft_reg_tx.wr_data_q = cght_data.reg_data_q;
+                  dft_reg_tx.reg_length = cght_data.reg_data_q.size();
+               end
+               dft_reg_ap.write(dft_reg_tx);
+            end// if(dft_tdr_network(t,i,temp_dr_q[i],cght_data)) begin
+         end
+      end
+      else begin
+         dft_reg_tx = dft_register_transaction::type_id::create("dft_reg_tx");
+         dft_reg_tx.read_not_write = t.read_not_write;
+         dft_reg_tx.address = {temp_ir[`IEEE_1149_IR_WIDTH-1:0],`SIB_WIDTH'b0};
+         if(t.read_not_write) begin
+            dft_reg_tx.rd_data_q = t.tdo_dr_queue;
+            dft_reg_tx.reg_length = t.tdo_dr_queue.size();
+         end
+         else begin
+            dft_reg_tx.wr_data_q = t.tdi_dr_queue;
+            dft_reg_tx.reg_length = t.tdi_dr_queue.size();
+         end
+         dft_reg_ap.write(dft_reg_tx);
+      end
    endfunction: write
   
-   function void dft_reg_network ( jtag_transaction jtag_tx, ref caught_data cght_data);
-   endfunction: dft_reg_network
-
+   virtual function void node_initialize(void);
+      //sel_wir node initialize.
+      foreach (sel_wir[i]) begin
+         sel_wir[i].is_selwir = 1;
+         sel_wir[i].value = 1;
+      end
+   endfunction :node_initialize
+   
+   virtual function bit dft_tdr_network (jtag_transaction jtag_tx, int unsigned shift_cycle = 0, bit tdi, ref caught_data cght_data); 
+      int unsigned                  chain_length = `I1687_LENGTH;
+      int unsigned                  wdr_length;
+      bit[`IEEE_1500_IR_WIDTH-1:0]  wir_data;
+      bit                           tdi, tdo, caught_data_rdy; 
+        
+      //calculate current chain_length
+      case({sib[1].value, sib[0].value, sib[3].value, sib[2].value})
+         4'b0001: begin
+            chain_length = ((sel_wir[2].value == 1) ? chain_length + `IEEE_1500_IR_WIDTH : chain_length ) + 1;    
+            if((sel_wir[2].value == 0))begin
+               wdr_length = jtag_tx.o_dr_length - chain_length;
+               wdr_dynmc = new[wdr_length];
+            end
+         end
+         4'b0010: begin
+            chain_length = ((sel_wir[3].value == 1) ? chain_length + `IEEE_1500_IR_WIDTH : chain_length ) + 1;    
+            if((sel_wir[3].value == 0))begin
+               wdr_length = jtag_tx.o_dr_length - chain_length;
+               wdr_dynmc = new[wdr_length];
+            end
+         end
+         4'b0101: begin
+            chain_length = ((sel_wir[0].value == 1) ? chain_length + `IEEE_1500_IR_WIDTH : chain_length ) + 2;    
+            if((sel_wir[0].value == 0))begin
+               wdr_length = jtag_tx.o_dr_length - chain_length;
+               cascd_wdr_dynmc = new[wdr_length];
+            end
+         end
+         4'b1001: begin
+            chain_length = ((sel_wir[1].value == 1) ? chain_length + `IEEE_1500_IR_WIDTH : chain_length ) + 2;    
+            if((sel_wir[1].value == 0))begin
+               wdr_length = jtag_tx.o_dr_length - chain_length;
+               cascd_wdr_dynmc = new[wdr_length];
+            end
+         end
+      endcase
+      tdo = sib[2].out;
+     
+      //sib[2] connection
+      sib[2].in0 = sib[3].out;
+      sib[2].in1 = sel_wir[2].out;
+   
+      //sib[3] connection
+      sib[3].in0 = tdi;
+      sib[3].in1 = sel_wir[3].out;
+   
+      //sel_wir[3] connection
+      sel_wir[3].in = (sel_wir[3].value == 1 ) ? wir[0].out : wdr_dynmc[0].out;
+      
+      //wir/wdr_dynmc connection belong to sel_sir[3]
+      if(sib[3].value == 1 ) begin
+         if(sel_wir[3].value == 1) begin
+            wir[`IEEE_1500_IR_WIDTH - 1].in = tdi;
+            for(i=0; i<`IEEE_1500_IR_WIDTH - 1; i++)
+               wir[i].in = wir[i+1].out;
+         end
+         else begin
+            wdr_dynmc[wdr_dynmc.size - 1].in = tdi;
+            for(i=0; i<wdr_dynmc.size - 1; i++)
+               wdr_dynmc[i].in = wdr_dynmc[i+1].out;
+   
+            if(shift_cycle == jtag_tx.o_dr_length-1)begin
+               cght_data = caught_data::type_id::create("cght_data");
+               cght_data.caught_1500_reg = 1;
+               cght_data.reg_addr[`SIB_WIDTH-1:0] = {sib[1].value,sib[0].value,sib[3].value,sib[2].value};
+               foreach(wir[i]) cght_data.reg_addr[`SIB_WIDTH+i] = wir[i].value;
+               foreach(wdr_dynmc[i]) cght_data.reg_data_q[i] = wdr_dynmc[i].value;
+               caught_data_rdy = 1;
+            end
+         end
+      end
+      
+      //----------------------------
+      //sel_wir[2] connection
+      //----------------------------
+      if(sib[2].value == 1 ) begin
+         //connect wir to chain
+         if(sel_wir[2].value == 1) begin
+            wir[`IEEE_1500_IR_WIDTH - 1].in = sib[3].out;
+            for(i=0; i<`IEEE_1500_IR_WIDTH - 1; i++)
+               wir[i].in = wir[i+1].out;
+            //sel_wir[2] connection branch3
+            sel_wir[2].in = wir[0].out;
+         end
+         else begin
+            //get current ir opecode
+            foreach(wir[i]) wir_data[i] = wir[i].value;
+            if(wir_data == `SUB_CLIENT_SIB_OPCODE) begin
+               //sel_wir[2] connection branch2
+               sel_wir[2].in = sib[0].out;
+               
+               //----------------------------
+               //sib[0] connection
+               //----------------------------
+               sib[0].in0 = sib[1].out;
+               sib[0].in1 = sel_wir[0].out;
+               
+               if(sib[0].value == 1)begin
+                  //----------------------------
+                  //sel_wir[0] connection
+                  //----------------------------
+                  sel_wir[0].in = (sel_wir[0].value) ? cascd_wir[0].out : cascd_wdr_dynmc[0].out;
+                  if(sel_wir[0].value == 1) begin
+                     cascd_wir[`IEEE_1500_IR_WIDTH-1].in = sib[1].out;
+                     for(i=0; i < `IEEE_1500_IR_WIDTH - 1; i++) cascd_wir[i].in = cascd_wir[i+1].out;
+                  end
+                  else begin
+                     cascd_wdr_dynmc[cascd_wdr_dynmc.size-1].in = sib[1].out;
+                     for(i=0; i < cascd_wdr_dynmc.size - 1; i++) cascd_wdr_dynmc[i].in = cascd_wdr_dynmc[i+1].out;
+                     
+                     if(shift_cycle == jtag_tx.o_dr_length-1)begin
+                        cght_data = caught_data::type_id::create("cght_data");
+                        cght_data.caught_1500_reg = 1;
+                        cght_data.reg_addr[`SIB_WIDTH-1:0] = {sib[1].value,sib[0].value,sib[3].value,sib[2].value};
+                        foreach(cascd_wir[i]) cght_data.reg_addr[`SIB_WIDTH+i] = cascd_wir[i].value;
+                        foreach(cascd_wdr_dynmc[i]) cght_data.reg_data_q[i] = cascd_wdr_dynmc[i].value;
+                        caught_data_rdy = 1;
+                     end// if(shift_cycle == jtag_tx.o_dr_length-1)begin
+                  end//! if(sel_wir[0].value == 1) begin
+               end// if(sib[0].value == 1)begin
+               
+               //----------------------------
+               //sib[1] connection
+               //----------------------------
+               sib[1].in0 = sib[3].out;
+               sib[1].in1 = sel_wir[1].out;
+   
+               if(sib[1].value == 1)begin
+                  //----------------------------
+                  //sel_wir[1] connection
+                  //----------------------------
+                  sel_wir[1].in = (sel_wir[1].value) ? cascd_wir[0].out : cascd_wdr_dynmc[0].out;
+                  if(sel_wir[1].value == 1) begin
+                     cascd_wir[`IEEE_1500_IR_WIDTH-1].in = sib[3].out;
+                     for(i=0; i < `IEEE_1500_IR_WIDTH - 1; i++) cascd_wir[i].in = cascd_wir[i+1].out;
+                  end
+                  else begin
+                     cascd_wdr_dynmc[cascd_wdr_dynmc.size-1].in = sib[3].out;
+                     for(i=0; i < cascd_wdr_dynmc.size - 1; i++) cascd_wdr_dynmc[i].in = cascd_wdr_dynmc[i+1].out;
+                     
+                     if(shift_cycle == jtag_tx.o_dr_length-1)begin
+                        cght_data = caught_data::type_id::create("cght_data");
+                        cght_data.caught_1500_reg = 1;
+                        cght_data.reg_addr[`SIB_WIDTH-1:0] = {sib[1].value,sib[0].value,sib[3].value,sib[2].value};
+                        foreach(cascd_wir[i]) cght_data.reg_addr[`SIB_WIDTH+i] = cascd_wir[i].value;
+                        foreach(cascd_wdr_dynmc[i]) cght_data.reg_data_q[i] = cascd_wdr_dynmc[i].value;
+                        caught_data_rdy = 1;
+                     end// if(shift_cycle == jtag_tx.o_dr_length-1)begin
+                  end//! if(sel_wir[1].value == 1) begin
+               end//if(sib[1].value == 1)begin
+            end// if(wir_data == `SUB_CLIENT_SIB_OPCODE) begin
+            else begin
+               wdr_dynmc[wdr_dynmc.size - 1].in = sib[3].out;
+               for(i=0; i<wdr_dynmc.size - 1; i++)
+               wdr_dynmc[i].in = wdr_dynmc[i+1].out;
+               //sel_wir[2] connection branch1
+               sel_wir[2].in = wdr_dynmc[0].out;
+               
+               if(shift_cycle == jtag_tx.o_dr_length-1)begin
+                  cght_data = caught_data::type_id::create("cght_data");
+                  cght_data.caught_1500_reg = 1;
+                  cght_data.reg_addr[`SIB_WIDTH-1:0] = {sib[1].value,sib[0].value,sib[3].value,sib[2].value};
+                  foreach(wir[i]) cght_data.reg_addr[`SIB_WIDTH+i] = wir[i].value;
+                  foreach(wdr_dynmc[i]) cght_data.reg_data_q[i] = wdr_dynmc[i].value;
+                  caught_data_rdy = 1;
+            end// if(shift_cycle == jtag_tx.o_dr_length-1)begin
+            end// !if(wir_data == `SUB_CLIENT_SIB_OPCODE) begin
+         end //!if(sel_wir[2].value == 1) begin
+      end //if(sib[2].value == 1 ) begin
+      
+      wdr_dynmc.delete();
+      cascd_wdr_dynmc.delete();
+   
+      return caught_data_rdy;
+   endfunction: dft_tdr_network
 endclass:dft_register_monitor
 //------------------------------------------------------------------------------
 // class: jtag_monitor

@@ -16,12 +16,12 @@
 `define BYPASS_ADDR          {`BYPASS_OPCODE,`SIB_WIDTH'h0} 
 
 `define I1687_OPCODE         `IEEE_1149_IR_WIDTH'hf0
-`define I1687_LENGTH         2
+`define I1687_LENGTH         `LVL1SIB_WIDTH 
 `define I1687_RST_VALUE      `I1687_LENGTH'h0
 `define I1687_ADDR          {`I1687_OPCODE,`SIB_WIDTH'h0} 
 
 `define SUB_CLIENT_SIB_OPCODE         `IEEE_1500_IR_WIDTH'hc0
-`define SUB_CLIENT_SIB_LENGTH         2 
+`define SUB_CLIENT_SIB_LENGTH         `LVL2SIB_WIDTH 
 `define SUB_CLIENT_SIB_RST_VALUE      `SUB_CLIENT_SIB_LENGTH'h0
 `define SUB_CLIENT_SIB_ADDR           {`SUB_CLIENT_SIB_OPCODE,`SIB_WIDTH'b0001} 
 //------------------------------------------------------------------------------
@@ -126,7 +126,7 @@ class ieee1500_sub_client_sib_reg extends uvm_reg;
                        .lsb_pos                ( 0), 
                        .access                 ( "RW" ), 
                        .volatile               ( 0    ),
-                       .reset                  ( `sub_client_sib_RST_VALUE), 
+                       .reset                  ( `SUB_CLIENT_SIB_RST_VALUE), 
                        .has_reset              ( 1    ), 
                        .is_rand                ( 1    ), 
                        .individually_accessible( 0   ) );
@@ -168,12 +168,11 @@ class dft_register_block extends uvm_reg_block;
       sub_client_sib_reg.configure( .blk_parent( this ) );
       sub_client_sib_reg.build();
 
-      reg_map = create_map( .name( "reg_map" ), .base_addr( `DFT_REG_ADDR_WIDTH'h00 ), 
-                            .n_bytes( `MAX_N_BYTES ), .endian( UVM_LITTLE_ENDIAN ) );
-      reg_map.add_reg( .rg( bypass_reg ), .offset( `BYPASS_OPCODE), .rights( "RW" ) );
-      reg_map.add_reg( .rg( idcode_reg  ), .offset( `IDCODE_OPCODE ), .rights( "RW" ) );
-      reg_map.add_reg( .rg( scanconfig_reg), .offset( `SCANCONFIG_OPCODE), .rights( "RW" ) );
-      reg_map.add_reg( .rg( sub_client_sib_reg), .offset( `SUB_CLIENT_SIB_OPCODE), .rights( "RW" ) );
+      reg_map = create_map( .name( "reg_map" ), .base_addr( `DFT_REG_ADDR_WIDTH'b0 ),.n_bytes( `MAX_N_BYTES ), .endian( UVM_LITTLE_ENDIAN ) );
+      reg_map.add_reg( .rg( bypass_reg ), .offset( `BYPASS_ADDR), .rights( "RW" ) );
+      reg_map.add_reg( .rg( idcode_reg  ), .offset( `IDCODE_ADDR ), .rights( "RW" ) );
+      reg_map.add_reg( .rg( scanconfig_reg), .offset( `SCANCONFIG_ADDR), .rights( "RW" ) );
+      reg_map.add_reg( .rg( sub_client_sib_reg), .offset( `SUB_CLIENT_SIB_ADDR), .rights( "RW" ) );
       lock_model(); // finalize the address mapping
    endfunction: build
 
