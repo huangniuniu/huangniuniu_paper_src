@@ -34,7 +34,7 @@ module system_shell( jtag_if.slave_mp jtag_if, clk_if clk_if, reset_if.dut_mp re
    //-------------------------------------------------------------------------------
    //1149_1 reg block 
    //-------------------------------------------------------------------------------
-   wire[`IR_WIDTH-1:0]              ir;
+   wire[`IEEE_1149_IR_WIDTH-1:0]              ir;
    wire                             ir_tdo;
    reg                              sel_ir;
    reg                              sel_dr;
@@ -120,7 +120,7 @@ module system_shell( jtag_if.slave_mp jtag_if, clk_if clk_if, reset_if.dut_mp re
    assign sel_ir = c_state == `SELECT_IR_SCAN || c_state == `CAPTURE_IR || c_state == `SHIFT_IR || c_state == `EXIT1_IR || c_state == `UPDATE_IR;
    assign sel_dr = c_state == `SELECT_DR_SCAN || c_state == `CAPTURE_DR || c_state == `SHIFT_DR || c_state == `EXIT1_DR || c_state == `UPDATE_DR;
    
-   JTAGTDR  #(`IR_WIDTH)jtag_ir ( .RSTVAL ({`IR_WIDTH{1'b1}}), 
+   JTAGTDR  #(`IEEE_1149_IR_WIDTH)jtag_ir ( .RSTVAL ({`IEEE_1149_IR_WIDTH{1'b1}}), 
                      .CAP_D  (ir),
                      .TDR_Q  (ir),
                      .CAP    (capture_ir),  

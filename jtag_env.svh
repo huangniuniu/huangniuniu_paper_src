@@ -71,8 +71,6 @@ endclass : bus_reg_ext
 // class: jtag_transaction
 //------------------------------------------------------------------------------
 class jtag_transaction extends uvm_sequence_item;
-    rand  protocol_e                 protocol;
-
     bit                              o_ir[];
 
     rand  int unsigned               o_dr_length;
@@ -132,7 +130,7 @@ class jtag_transaction extends uvm_sequence_item;
 
         s = super.convert2string();
         
-        $sformat(s, "%s\n ////////////////////////////////////////////////////////////\n jtag_transaction\n protocol \t%0s\n o_ir \t%8b\n o_dr_length \t%0d\n o_dr \t",s, protocol.name(), o_ir, o_dr_length);
+        $sformat(s, "%s\n ////////////////////////////////////////////////////////////\n jtag_transaction\n o_ir_length \t%8b\n o_dr_length \t%0d\n o_dr \t",s, o_ir_length, o_dr_length);
          
         if (remainder != 0) begin
             if (remainder == 1)
@@ -149,6 +147,23 @@ class jtag_transaction extends uvm_sequence_item;
             $sformat(s, "%s%0h",s,hex_value);
         end
         
+        four_bits_num = o_ir_length / 4;
+        remainder = o_ir_length % 4;
+        if (remainder != 0) begin
+            if (remainder == 1)
+                hex_value = o_ir[four_bits_num*4];
+            else if (remainder == 2)
+                hex_value = o_ir[four_bits_num*4 + 1] *2 + o_ir[four_bits_num*4];
+            else if (remainder == 3)
+                hex_value = o_ir[four_bits_num*4 + 2] *4 + o_ir[four_bits_num*4 + 1] *2 + o_ir[four_bits_num*4];
+            $sformat(s, "%s%0h",s,hex_value);
+        end 
+        
+        for ( int i = 0; i < four_bits_num; i++) begin
+            hex_value = o_dr[i*4+3] *8 + o_dr[i*4+2] *4 + o_dr[i*4+1] *2 + o_dr[i*4];
+            $sformat(s, "%s%0h",s,hex_value);
+        end
+ 
         $sformat(s, "%s\n chk_ir_tdo = \t%d\n chk_dr_tdo = \t%d\n",s,  chk_ir_tdo, chk_dr_tdo);
         $sformat(s, "%s\n ////////////////////////////////////////////////////////////\n",s);
         return s;
@@ -197,11 +212,17 @@ endclass:jtag_transaction
 //------------------------------------------------------------------------------
 class stil_info_transaction extends uvm_sequence_item;
     string     stil_info;
-
+    int unsigned     time_stamp;
     `uvm_object_utils( stil_info_transaction )
     
     function new(string name = "stil_info_transaction");
         super.new(name);
+    endfunction
+
+    function string convert2string();
+        string       s;
+        $sformat(s, "%s\n stil_info = \t%s \n time_stamp = \t%d ",s, stil_info, time_stamp);
+        return s;
     endfunction
  endclass: stil_info_transaction    
 
@@ -221,6 +242,25 @@ class dft_register_transaction extends uvm_sequence_item;
         super.new(name);
         extension = new("extension");
     endfunction
+
+    function string convert2string();
+        string       s;
+        $sformat(s, "%s\n read_not_write = \t%d \n address = \t%h \n reg_length = \t%d\n",s, read_not_write, address, reg_length);
+        
+        $sformat(s, "\n ///////////////wr_data_q//////////////////////////\n" );
+        foreach( wr_data_q[i] )
+            $sformat(s, "%s%0b",s,wr_data_q[$-i] );
+        $sformat(s, "%s\n /////////////////////////////////////////////////////\n",s);
+        
+        $sformat(s, "\n ///////////////rd_data_q//////////////////////////\n" );
+        foreach( rd_data_q[i] )
+            $sformat(s, "%s%0b",s,rd_data_q[$-i] );
+        $sformat(s, "%s\n /////////////////////////////////////////////////////\n",s);
+      
+      
+        return s;
+    endfunction: convert2string
+
 
 endclass: dft_register_transaction    
 
@@ -249,21 +289,26 @@ class dft_register_monitor extends uvm_subscriber #(jtag_transaction);
       super.build_phase( phase );
       dft_reg_ap = new( .name("dft_reg_ap"), .parent(this) );
 
+
       for(int i=0; i<`SIB_WIDTH; i++) begin
-         temp_name = $sformatf("sib_%0d",i);
-         sib[0] = sib_node::type_id::create::("sib0");
-         sel_wir[i] = reg_node::type_id::create::("sel_wir[i]");
+         temp_name = $sformatf("sib[%0d]",i);
+         sib[i] = new(temp_name);
+         temp_name = $sformatf("sel_wir[%0d]",i);
+         sel_wir[i] = new(temp_name);
       end
       
       for(int i=0; i<`IEEE_1500_IR_WIDTH; i++) begin
-         wir[i] = reg_node::type_id::create::("wir[i]");
-         cascd_wir[i] = reg_node::type_id::create::("cascd_wir[i]");
+         temp_name = $sformatf("wir[%0d]",i);
+         wir[i] = new(temp_name);
+         temp_name = $sformatf("cascd_wir[%0d]",i);
+         cascd_wir[i] = new(temp_name);
       end
       
       node_initialize();
    endfunction: build_phase
 
    function void write( jtag_transaction t);
+      caught_data          cght_data;
       if(t.read_not_write)begin
          foreach(t.tdo_ir_queue[i]) begin
             temp_ir[i] = t.tdo_ir_queue[i]; 
@@ -278,25 +323,25 @@ class dft_register_monitor extends uvm_subscriber #(jtag_transaction);
       end
       
       if(temp_ir == `I1687_OPCODE) begin
-         for(int i=0; i<t.o_dr_length; i++)begin
-            if(dft_tdr_network(t,i,temp_dr_q[i],cght_data)) begin
 
-               dft_reg_tx = dft_register_transaction::type_id::create("dft_reg_tx");
-               
-               dft_reg_tx.read_not_write = t.read_not_write;
-               dft_reg_tx.address = cght_data.reg_addr;
-               
-               if(t.read_not_write) begin
-                  dft_reg_tx.rd_data_q = cght_data.reg_data_q;
-                  dft_reg_tx.reg_length = cght_data.reg_data_q.size();
-               end
-               else begin
-                  dft_reg_tx.wr_data_q = cght_data.reg_data_q;
-                  dft_reg_tx.reg_length = cght_data.reg_data_q.size();
-               end
-               dft_reg_ap.write(dft_reg_tx);
-            end// if(dft_tdr_network(t,i,temp_dr_q[i],cght_data)) begin
+         //cght_data = new("cght_data"); 
+         
+         cght_data = dft_tdr_network(t); 
+
+         dft_reg_tx = dft_register_transaction::type_id::create("dft_reg_tx");
+         
+         dft_reg_tx.read_not_write = t.read_not_write;
+         dft_reg_tx.address = cght_data.reg_addr;
+         
+         if(t.read_not_write) begin
+            dft_reg_tx.rd_data_q = cght_data.reg_data_q;
+            dft_reg_tx.reg_length = cght_data.reg_data_q.size();
          end
+         else begin
+            dft_reg_tx.wr_data_q = cght_data.reg_data_q;
+            dft_reg_tx.reg_length = cght_data.reg_data_q.size();
+         end
+         dft_reg_ap.write(dft_reg_tx);
       end
       else begin
          dft_reg_tx = dft_register_transaction::type_id::create("dft_reg_tx");
@@ -314,7 +359,7 @@ class dft_register_monitor extends uvm_subscriber #(jtag_transaction);
       end
    endfunction: write
   
-   virtual function void node_initialize(void);
+   virtual function void node_initialize();
       //sel_wir node initialize.
       foreach (sel_wir[i]) begin
          sel_wir[i].is_selwir = 1;
@@ -322,181 +367,181 @@ class dft_register_monitor extends uvm_subscriber #(jtag_transaction);
       end
    endfunction :node_initialize
    
-   virtual function bit dft_tdr_network (jtag_transaction jtag_tx, int unsigned shift_cycle = 0, bit tdi, ref caught_data cght_data); 
+   virtual function caught_data dft_tdr_network (jtag_transaction jtag_tx); 
       int unsigned                  chain_length = `I1687_LENGTH;
       int unsigned                  wdr_length;
       bit[`IEEE_1500_IR_WIDTH-1:0]  wir_data;
-      bit                           tdi, tdo, caught_data_rdy; 
-        
-      //calculate current chain_length
-      case({sib[1].value, sib[0].value, sib[3].value, sib[2].value})
-         4'b0001: begin
-            chain_length = ((sel_wir[2].value == 1) ? chain_length + `IEEE_1500_IR_WIDTH : chain_length ) + 1;    
-            if((sel_wir[2].value == 0))begin
-               wdr_length = jtag_tx.o_dr_length - chain_length;
-               wdr_dynmc = new[wdr_length];
+      bit                           tdi, tdo; 
+      caught_data                   cght_data; 
+      for(int shift_cycle = 0; shift_cycle < jtag_tx.o_dr_length; shift_cycle++) begin
+         tdi = jtag_tx.read_not_write ? jtag_tx.tdo_dr_queue[shift_cycle] : jtag_tx.tdi_dr_queue[shift_cycle];
+         //calculate current chain_length
+         case({sib[1].value, sib[0].value, sib[3].value, sib[2].value})
+            4'b0001: begin
+               chain_length = ((sel_wir[2].value == 1) ? chain_length + `IEEE_1500_IR_WIDTH : chain_length ) + 1;    
+               if((sel_wir[2].value == 0))begin
+                  wdr_length = jtag_tx.o_dr_length - chain_length;
+                  wdr_dynmc = new[wdr_length];
+               end
             end
-         end
-         4'b0010: begin
-            chain_length = ((sel_wir[3].value == 1) ? chain_length + `IEEE_1500_IR_WIDTH : chain_length ) + 1;    
-            if((sel_wir[3].value == 0))begin
-               wdr_length = jtag_tx.o_dr_length - chain_length;
-               wdr_dynmc = new[wdr_length];
+            4'b0010: begin
+               chain_length = ((sel_wir[3].value == 1) ? chain_length + `IEEE_1500_IR_WIDTH : chain_length ) + 1;    
+               if((sel_wir[3].value == 0))begin
+                  wdr_length = jtag_tx.o_dr_length - chain_length;
+                  wdr_dynmc = new[wdr_length];
+               end
             end
-         end
-         4'b0101: begin
-            chain_length = ((sel_wir[0].value == 1) ? chain_length + `IEEE_1500_IR_WIDTH : chain_length ) + 2;    
-            if((sel_wir[0].value == 0))begin
-               wdr_length = jtag_tx.o_dr_length - chain_length;
-               cascd_wdr_dynmc = new[wdr_length];
+            4'b0101: begin
+               chain_length = ((sel_wir[0].value == 1) ? chain_length + `IEEE_1500_IR_WIDTH : chain_length ) + 2;    
+               if((sel_wir[0].value == 0))begin
+                  wdr_length = jtag_tx.o_dr_length - chain_length;
+                  cascd_wdr_dynmc = new[wdr_length];
+               end
             end
-         end
-         4'b1001: begin
-            chain_length = ((sel_wir[1].value == 1) ? chain_length + `IEEE_1500_IR_WIDTH : chain_length ) + 2;    
-            if((sel_wir[1].value == 0))begin
-               wdr_length = jtag_tx.o_dr_length - chain_length;
-               cascd_wdr_dynmc = new[wdr_length];
+            4'b1001: begin
+               chain_length = ((sel_wir[1].value == 1) ? chain_length + `IEEE_1500_IR_WIDTH : chain_length ) + 2;    
+               if((sel_wir[1].value == 0))begin
+                  wdr_length = jtag_tx.o_dr_length - chain_length;
+                  cascd_wdr_dynmc = new[wdr_length];
+               end
             end
-         end
-      endcase
-      tdo = sib[2].out;
+         endcase
+         
+         tdo = sib[2].out;
      
-      //sib[2] connection
-      sib[2].in0 = sib[3].out;
-      sib[2].in1 = sel_wir[2].out;
+         //sib[2] connection
+         sib[2].in0 = sib[3].out;
+         sib[2].in1 = sel_wir[2].out;
    
-      //sib[3] connection
-      sib[3].in0 = tdi;
-      sib[3].in1 = sel_wir[3].out;
+         //sib[3] connection
+         sib[3].in0 = tdi;
+         sib[3].in1 = sel_wir[3].out;
    
-      //sel_wir[3] connection
-      sel_wir[3].in = (sel_wir[3].value == 1 ) ? wir[0].out : wdr_dynmc[0].out;
-      
-      //wir/wdr_dynmc connection belong to sel_sir[3]
-      if(sib[3].value == 1 ) begin
-         if(sel_wir[3].value == 1) begin
-            wir[`IEEE_1500_IR_WIDTH - 1].in = tdi;
-            for(i=0; i<`IEEE_1500_IR_WIDTH - 1; i++)
-               wir[i].in = wir[i+1].out;
-         end
-         else begin
-            wdr_dynmc[wdr_dynmc.size - 1].in = tdi;
-            for(i=0; i<wdr_dynmc.size - 1; i++)
-               wdr_dynmc[i].in = wdr_dynmc[i+1].out;
-   
-            if(shift_cycle == jtag_tx.o_dr_length-1)begin
-               cght_data = caught_data::type_id::create("cght_data");
-               cght_data.caught_1500_reg = 1;
-               cght_data.reg_addr[`SIB_WIDTH-1:0] = {sib[1].value,sib[0].value,sib[3].value,sib[2].value};
-               foreach(wir[i]) cght_data.reg_addr[`SIB_WIDTH+i] = wir[i].value;
-               foreach(wdr_dynmc[i]) cght_data.reg_data_q[i] = wdr_dynmc[i].value;
-               caught_data_rdy = 1;
+         //sel_wir[3] connection
+         sel_wir[3].in = (sel_wir[3].value == 1 ) ? wir[0].out : wdr_dynmc[0].out;
+         
+         //wir/wdr_dynmc connection belong to sel_sir[3]
+         if(sib[3].value == 1 ) begin
+            if(sel_wir[3].value == 1) begin
+               wir[`IEEE_1500_IR_WIDTH - 1].in = tdi;
+               for(int i=0; i<`IEEE_1500_IR_WIDTH - 1; i++)
+                  wir[i].in = wir[i+1].out;
             end
-         end
-      end
-      
-      //----------------------------
-      //sel_wir[2] connection
-      //----------------------------
-      if(sib[2].value == 1 ) begin
-         //connect wir to chain
-         if(sel_wir[2].value == 1) begin
-            wir[`IEEE_1500_IR_WIDTH - 1].in = sib[3].out;
-            for(i=0; i<`IEEE_1500_IR_WIDTH - 1; i++)
-               wir[i].in = wir[i+1].out;
-            //sel_wir[2] connection branch3
-            sel_wir[2].in = wir[0].out;
-         end
-         else begin
-            //get current ir opecode
-            foreach(wir[i]) wir_data[i] = wir[i].value;
-            if(wir_data == `SUB_CLIENT_SIB_OPCODE) begin
-               //sel_wir[2] connection branch2
-               sel_wir[2].in = sib[0].out;
-               
-               //----------------------------
-               //sib[0] connection
-               //----------------------------
-               sib[0].in0 = sib[1].out;
-               sib[0].in1 = sel_wir[0].out;
-               
-               if(sib[0].value == 1)begin
-                  //----------------------------
-                  //sel_wir[0] connection
-                  //----------------------------
-                  sel_wir[0].in = (sel_wir[0].value) ? cascd_wir[0].out : cascd_wdr_dynmc[0].out;
-                  if(sel_wir[0].value == 1) begin
-                     cascd_wir[`IEEE_1500_IR_WIDTH-1].in = sib[1].out;
-                     for(i=0; i < `IEEE_1500_IR_WIDTH - 1; i++) cascd_wir[i].in = cascd_wir[i+1].out;
-                  end
-                  else begin
-                     cascd_wdr_dynmc[cascd_wdr_dynmc.size-1].in = sib[1].out;
-                     for(i=0; i < cascd_wdr_dynmc.size - 1; i++) cascd_wdr_dynmc[i].in = cascd_wdr_dynmc[i+1].out;
-                     
-                     if(shift_cycle == jtag_tx.o_dr_length-1)begin
-                        cght_data = caught_data::type_id::create("cght_data");
-                        cght_data.caught_1500_reg = 1;
-                        cght_data.reg_addr[`SIB_WIDTH-1:0] = {sib[1].value,sib[0].value,sib[3].value,sib[2].value};
-                        foreach(cascd_wir[i]) cght_data.reg_addr[`SIB_WIDTH+i] = cascd_wir[i].value;
-                        foreach(cascd_wdr_dynmc[i]) cght_data.reg_data_q[i] = cascd_wdr_dynmc[i].value;
-                        caught_data_rdy = 1;
-                     end// if(shift_cycle == jtag_tx.o_dr_length-1)begin
-                  end//! if(sel_wir[0].value == 1) begin
-               end// if(sib[0].value == 1)begin
-               
-               //----------------------------
-               //sib[1] connection
-               //----------------------------
-               sib[1].in0 = sib[3].out;
-               sib[1].in1 = sel_wir[1].out;
-   
-               if(sib[1].value == 1)begin
-                  //----------------------------
-                  //sel_wir[1] connection
-                  //----------------------------
-                  sel_wir[1].in = (sel_wir[1].value) ? cascd_wir[0].out : cascd_wdr_dynmc[0].out;
-                  if(sel_wir[1].value == 1) begin
-                     cascd_wir[`IEEE_1500_IR_WIDTH-1].in = sib[3].out;
-                     for(i=0; i < `IEEE_1500_IR_WIDTH - 1; i++) cascd_wir[i].in = cascd_wir[i+1].out;
-                  end
-                  else begin
-                     cascd_wdr_dynmc[cascd_wdr_dynmc.size-1].in = sib[3].out;
-                     for(i=0; i < cascd_wdr_dynmc.size - 1; i++) cascd_wdr_dynmc[i].in = cascd_wdr_dynmc[i+1].out;
-                     
-                     if(shift_cycle == jtag_tx.o_dr_length-1)begin
-                        cght_data = caught_data::type_id::create("cght_data");
-                        cght_data.caught_1500_reg = 1;
-                        cght_data.reg_addr[`SIB_WIDTH-1:0] = {sib[1].value,sib[0].value,sib[3].value,sib[2].value};
-                        foreach(cascd_wir[i]) cght_data.reg_addr[`SIB_WIDTH+i] = cascd_wir[i].value;
-                        foreach(cascd_wdr_dynmc[i]) cght_data.reg_data_q[i] = cascd_wdr_dynmc[i].value;
-                        caught_data_rdy = 1;
-                     end// if(shift_cycle == jtag_tx.o_dr_length-1)begin
-                  end//! if(sel_wir[1].value == 1) begin
-               end//if(sib[1].value == 1)begin
-            end// if(wir_data == `SUB_CLIENT_SIB_OPCODE) begin
             else begin
-               wdr_dynmc[wdr_dynmc.size - 1].in = sib[3].out;
-               for(i=0; i<wdr_dynmc.size - 1; i++)
-               wdr_dynmc[i].in = wdr_dynmc[i+1].out;
-               //sel_wir[2] connection branch1
-               sel_wir[2].in = wdr_dynmc[0].out;
-               
+               wdr_dynmc[wdr_dynmc.size - 1].in = tdi;
+               for(int i=0; i<wdr_dynmc.size - 1; i++)
+                  wdr_dynmc[i].in = wdr_dynmc[i+1].out;
+   
                if(shift_cycle == jtag_tx.o_dr_length-1)begin
                   cght_data = caught_data::type_id::create("cght_data");
                   cght_data.caught_1500_reg = 1;
                   cght_data.reg_addr[`SIB_WIDTH-1:0] = {sib[1].value,sib[0].value,sib[3].value,sib[2].value};
                   foreach(wir[i]) cght_data.reg_addr[`SIB_WIDTH+i] = wir[i].value;
                   foreach(wdr_dynmc[i]) cght_data.reg_data_q[i] = wdr_dynmc[i].value;
-                  caught_data_rdy = 1;
-            end// if(shift_cycle == jtag_tx.o_dr_length-1)begin
-            end// !if(wir_data == `SUB_CLIENT_SIB_OPCODE) begin
-         end //!if(sel_wir[2].value == 1) begin
-      end //if(sib[2].value == 1 ) begin
+               end
+            end
+         end
+         
+         //----------------------------
+         //sel_wir[2] connection
+         //----------------------------
+         if(sib[2].value == 1 ) begin
+            //connect wir to chain
+            if(sel_wir[2].value == 1) begin
+               wir[`IEEE_1500_IR_WIDTH - 1].in = sib[3].out;
+               for(int i=0; i<`IEEE_1500_IR_WIDTH - 1; i++)
+                  wir[i].in = wir[i+1].out;
+               //sel_wir[2] connection branch3
+               sel_wir[2].in = wir[0].out;
+            end
+            else begin
+               //get current ir opecode
+               foreach(wir[i]) wir_data[i] = wir[i].value;
+               if(wir_data == `SUB_CLIENT_SIB_OPCODE) begin
+                  //sel_wir[2] connection branch2
+                  sel_wir[2].in = sib[0].out;
+                  
+                  //----------------------------
+                  //sib[0] connection
+                  //----------------------------
+                  sib[0].in0 = sib[1].out;
+                  sib[0].in1 = sel_wir[0].out;
+                  
+                  if(sib[0].value == 1)begin
+                     //----------------------------
+                     //sel_wir[0] connection
+                     //----------------------------
+                     sel_wir[0].in = (sel_wir[0].value) ? cascd_wir[0].out : cascd_wdr_dynmc[0].out;
+                     if(sel_wir[0].value == 1) begin
+                        cascd_wir[`IEEE_1500_IR_WIDTH-1].in = sib[1].out;
+                        for(int i=0; i < `IEEE_1500_IR_WIDTH - 1; i++) cascd_wir[i].in = cascd_wir[i+1].out;
+                     end
+                     else begin
+                        cascd_wdr_dynmc[cascd_wdr_dynmc.size-1].in = sib[1].out;
+                        for(int i=0; i < cascd_wdr_dynmc.size - 1; i++) cascd_wdr_dynmc[i].in = cascd_wdr_dynmc[i+1].out;
+                        
+                        if(shift_cycle == jtag_tx.o_dr_length-1)begin
+                           cght_data = caught_data::type_id::create("cght_data");
+                           cght_data.caught_1500_reg = 1;
+                           cght_data.reg_addr[`SIB_WIDTH-1:0] = {sib[1].value,sib[0].value,sib[3].value,sib[2].value};
+                           foreach(cascd_wir[i]) cght_data.reg_addr[`SIB_WIDTH+i] = cascd_wir[i].value;
+                           foreach(cascd_wdr_dynmc[i]) cght_data.reg_data_q[i] = cascd_wdr_dynmc[i].value;
+                        end// if(shift_cycle == jtag_tx.o_dr_length-1)begin
+                     end//! if(sel_wir[0].value == 1) begin
+                  end// if(sib[0].value == 1)begin
+                  
+                  //----------------------------
+                  //sib[1] connection
+                  //----------------------------
+                  sib[1].in0 = sib[3].out;
+                  sib[1].in1 = sel_wir[1].out;
+   
+                  if(sib[1].value == 1)begin
+                     //----------------------------
+                     //sel_wir[1] connection
+                     //----------------------------
+                     sel_wir[1].in = (sel_wir[1].value) ? cascd_wir[0].out : cascd_wdr_dynmc[0].out;
+                     if(sel_wir[1].value == 1) begin
+                        cascd_wir[`IEEE_1500_IR_WIDTH-1].in = sib[3].out;
+                        for(int i=0; i < `IEEE_1500_IR_WIDTH - 1; i++) cascd_wir[i].in = cascd_wir[i+1].out;
+                     end
+                     else begin
+                        cascd_wdr_dynmc[cascd_wdr_dynmc.size-1].in = sib[3].out;
+                        for(int i=0; i < cascd_wdr_dynmc.size - 1; i++) cascd_wdr_dynmc[i].in = cascd_wdr_dynmc[i+1].out;
+                        
+                        if(shift_cycle == jtag_tx.o_dr_length-1)begin
+                           cght_data = caught_data::type_id::create("cght_data");
+                           cght_data.caught_1500_reg = 1;
+                           cght_data.reg_addr[`SIB_WIDTH-1:0] = {sib[1].value,sib[0].value,sib[3].value,sib[2].value};
+                           foreach(cascd_wir[i]) cght_data.reg_addr[`SIB_WIDTH+i] = cascd_wir[i].value;
+                           foreach(cascd_wdr_dynmc[i]) cght_data.reg_data_q[i] = cascd_wdr_dynmc[i].value;
+                        end// if(shift_cycle == jtag_tx.o_dr_length-1)begin
+                     end//! if(sel_wir[1].value == 1) begin
+                  end//if(sib[1].value == 1)begin
+               end// if(wir_data == `SUB_CLIENT_SIB_OPCODE) begin
+               else begin
+                  wdr_dynmc[wdr_dynmc.size - 1].in = sib[3].out;
+                  for(int i=0; i<wdr_dynmc.size - 1; i++)
+                  wdr_dynmc[i].in = wdr_dynmc[i+1].out;
+                  //sel_wir[2] connection branch1
+                  sel_wir[2].in = wdr_dynmc[0].out;
+                  
+                  if(shift_cycle == jtag_tx.o_dr_length-1)begin
+                     cght_data = caught_data::type_id::create("cght_data");
+                     cght_data.caught_1500_reg = 1;
+                     cght_data.reg_addr[`SIB_WIDTH-1:0] = {sib[1].value,sib[0].value,sib[3].value,sib[2].value};
+                     foreach(wir[i]) cght_data.reg_addr[`SIB_WIDTH+i] = wir[i].value;
+                     foreach(wdr_dynmc[i]) cght_data.reg_data_q[i] = wdr_dynmc[i].value;
+               end// if(shift_cycle == jtag_tx.o_dr_length-1)begin
+               end// !if(wir_data == `SUB_CLIENT_SIB_OPCODE) begin
+            end //!if(sel_wir[2].value == 1) begin
+         end //if(sib[2].value == 1 ) begin
+      end//for(int shift_cycle = 0; shift_cycle < jtag_tx.o_dr_length; shift_cycle++) begin
       
       wdr_dynmc.delete();
       cascd_wdr_dynmc.delete();
-   
-      return caught_data_rdy;
+      
+      return cght_data;
    endfunction: dft_tdr_network
 endclass:dft_register_monitor
 //------------------------------------------------------------------------------
@@ -719,6 +764,7 @@ class clk_driver extends uvm_driver#( jtag_transaction );
    int                       sysclk_half_period;
    clk_configuration         clk_cfg; 
    uvm_analysis_port #(stil_info_transaction) clk_drv_ap;
+   stil_info_transaction     stil_info_tx;
    function new( string name, uvm_component parent );
       super.new( name, parent );
    endfunction: new
@@ -740,7 +786,7 @@ class clk_driver extends uvm_driver#( jtag_transaction );
       
       clk_vi.tck = 0;
       clk_vi.sysclk = 0; 
-      #tck_half_period;
+      //#tck_half_period;
       forever begin
         #sysclk_half_period;
         clk_vi.sysclk = ~clk_vi.sysclk; 
@@ -753,6 +799,15 @@ class clk_driver extends uvm_driver#( jtag_transaction );
         clk_vi.sysclk = ~clk_vi.sysclk; 
         #sysclk_half_period;
         clk_vi.sysclk = ~clk_vi.sysclk; 
+        clk_vi.tck = ~clk_vi.tck;
+      
+        if(gen_stil_file == `ON)begin
+           stil_info_tx = stil_info_transaction::type_id::create("stil_info_tx");
+           stil_info_tx.stil_info = "sysclk = P; tck = P;";
+           stil_info_tx.time_stamp = $time;
+           `uvm_info("clk_drv",stil_info_tx.convert2string,UVM_DEBUG);
+           clk_drv_ap.write(stil_info_tx);
+        end
       end
    endtask: run_phase
 endclass: clk_driver
@@ -769,6 +824,7 @@ class jtag_driver extends uvm_driver#( jtag_transaction );
    string                  stil_file_name;
    int                     tck_half_period;
    jtag_configuration      jtag_cfg;
+   stil_info_transaction      stil_info_tx;
 
    function new( string name, uvm_component parent );
       super.new( name, parent );
@@ -786,81 +842,94 @@ class jtag_driver extends uvm_driver#( jtag_transaction );
       tck_half_period = jtag_cfg.tck_half_period;
       jtag_vi = jtag_cfg.jtag_vi;
    endfunction: build_phase
+  
+   function void call_stil_gen (bit gen_stil_file, string stil_str);
+      if(gen_stil_file == `ON) begin
+         stil_info_tx = stil_info_transaction::type_id::create("stil_info_tx");
+         stil_info_tx.stil_info = stil_str;
+         stil_info_tx.time_stamp = $time;
+         `uvm_info("jtag_drv",stil_info_tx.convert2string,UVM_DEBUG);
+         jtag_drv_ap.write(stil_info_tx);
+      end
+   endfunction
 
    task run_phase( uvm_phase phase );
       jtag_transaction  jtag_tx;
 
       string            fsm_nstate;
       string            stil_str;
-      int               stil_fd;
+      //int               stil_fd;
       string            chk_tdo_value;
-
       //For STIL convertion
-      if(gen_stil_file == `ON)begin
-         stil_fd = $fopen("jtag_1149_1_test.stil", "a");
-         //Header
-         stil_str = $sformatf({"STIL1.0\n",
-                               "Header{\n",
-                               "  (Title %s )\n",
-                               //"  (Date %t )\n",
-                               "}\n"}, stil_file_name);
-         $fdisplay(stil_fd,stil_str);
-         
-         //Signals
-         stil_str = $sformatf({"Signals { \n",
-                               "  TDO      Out;\n",
-                               "  TCK       In;\n",
-                               "  TRST      In;\n",
-                               "  TDI       In;\n",
-                               "  TMS       In;\n",
-                            "}\n"});
-         $fdisplay(stil_fd,stil_str);
+      //if(gen_stil_file == `ON)begin
+      //   stil_fd = $fopen("jtag_1149_1_test.stil", "a");
+      //   //Header
+      //   stil_str = $sformatf({"STIL1.0\n",
+      //                         "Header{\n",
+      //                         "  (Title %s )\n",
+      //                         //"  (Date %t )\n",
+      //                         "}\n"}, stil_file_name);
+      //   $fdisplay(stil_fd,stil_str);
+      //   
+      //   //Signals
+      //   stil_str = $sformatf({"Signals { \n",
+      //                         "  TDO      Out;\n",
+      //                         "  TCK       In;\n",
+      //                         "  TRST      In;\n",
+      //                         "  TDI       In;\n",
+      //                         "  TMS       In;\n",
+      //                      "}\n"});
+      //   $fdisplay(stil_fd,stil_str);
 
-         //Timing
-         stil_str = $sformatf({"Timing \"TCK_DOMAIN\"{\n",
-                               "  WaveformTable base {\n",
-                               "     Period'%d';\n",
-                               "       Waveforms {\n",
-                               "          TCK  { 0P { '0ns' D; '%dns' D/U; '%dns' D; }}\n",
-                               "          TDI  { 01 { '0ns' D; }}\n",
-                               "          TMS  { 01 { '0ns' D; }}\n",
-                               "          TRST { 01 { '0ns' D; }}\n",
-                               "          TDO  { LHX { '0ns' Z; '%dns' L/H/X;}}\n",
-                               "       }\n",
-                               "  }//WaveformTable\n",
-                              "}//Timing\n"},tck_half_period*2,tck_half_period,tck_half_period/2+tck_half_period,tck_half_period/2+tck_half_period/4);
-         $fdisplay(stil_fd,stil_str);
+      //   //Timing
+      //   stil_str = $sformatf({"Timing \"TCK_DOMAIN\"{\n",
+      //                         "  WaveformTable base {\n",
+      //                         "     Period'%d';\n",
+      //                         "       Waveforms {\n",
+      //                         "          TCK  { 0P { '0ns' D; '%dns' D/U; '%dns' D; }}\n",
+      //                         "          TDI  { 01 { '0ns' D; }}\n",
+      //                         "          TMS  { 01 { '0ns' D; }}\n",
+      //                         "          TRST { 01 { '0ns' D; }}\n",
+      //                         "          TDO  { LHX { '0ns' Z; '%dns' L/H/X;}}\n",
+      //                         "       }\n",
+      //                         "  }//WaveformTable\n",
+      //                        "}//Timing\n"},tck_half_period*2,tck_half_period,tck_half_period/2+tck_half_period,tck_half_period/2+tck_half_period/4);
+      //   $fdisplay(stil_fd,stil_str);
 
-         //PatternBurst
-         stil_str = $sformatf({"PatternBurst \"%s\" {\n",
-                               "    PatList { \" test_sequence\"; }\n",
-                               "    }\n",
-                               "}\n"},stil_file_name);
-         $fdisplay(stil_fd,stil_str);
-         
-         //PatternExec
-         stil_str = $sformatf({"PatternExec {\n",
-                               "    Timing  \" TCK_DOMAIN\";\n",
-                               "    PatternBurst \" %s\";\n",
-                               "}\n"},stil_file_name);
-         $fdisplay(stil_fd,stil_str);
+      //   //PatternBurst
+      //   stil_str = $sformatf({"PatternBurst \"%s\" {\n",
+      //                         "    PatList { \" test_sequence\"; }\n",
+      //                         "    }\n",
+      //                         "}\n"},stil_file_name);
+      //   $fdisplay(stil_fd,stil_str);
+      //   
+      //   //PatternExec
+      //   stil_str = $sformatf({"PatternExec {\n",
+      //                         "    Timing  \" TCK_DOMAIN\";\n",
+      //                         "    PatternBurst \" %s\";\n",
+      //                         "}\n"},stil_file_name);
+      //   $fdisplay(stil_fd,stil_str);
 
-         //Pattern
-         stil_str = $sformatf({"Pattern test_sequence {\n",
-                               "   //Reset DUT \n",
-                               "   V { TCK = 0; TDI = 0; TMS = 1; TRST = 1; TDO = X;}\n",
-                               "   V { TCK = 0; TDI = 0; TMS = 1; TRST = 1; TDO = X;}\n",
-                               "   V { TCK = 0; TDI = 0; TMS = 1; TRST = 1; TDO = X;}\n",
-                               "   V { TCK = 0; TDI = 0; TMS = 1; TRST = 1; TDO = X;}\n",
-                               "   V { TCK = 0; TDI = 0; TMS = 1; TRST = 1; TDO = X;}\n",
-                               "   V { TCK = 0; TDI = 0; TMS = 1; TRST = 1; TDO = X;}\n",
-                               "   V { TCK = 0; TDI = 0; TMS = 1; TRST = 1; TDO = X;}\n",
-                               "   V { TCK = 0; TDI = 0; TMS = 1; TRST = 0; TDO = X;}\n",
-                               "   //Out of reset DUT \n"});
-         $fdisplay(stil_fd,stil_str);
-      end //if(gen_stil_file == `ON)
+      //   //Pattern
+      //   stil_str = $sformatf({"Pattern test_sequence {\n",
+      //                         "   //Reset DUT \n",
+      //                         "   V { TCK = 0; TDI = 0; TMS = 1; TRST = 1; TDO = X;}\n",
+      //                         "   V { TCK = 0; TDI = 0; TMS = 1; TRST = 1; TDO = X;}\n",
+      //                         "   V { TCK = 0; TDI = 0; TMS = 1; TRST = 1; TDO = X;}\n",
+      //                         "   V { TCK = 0; TDI = 0; TMS = 1; TRST = 1; TDO = X;}\n",
+      //                         "   V { TCK = 0; TDI = 0; TMS = 1; TRST = 1; TDO = X;}\n",
+      //                         "   V { TCK = 0; TDI = 0; TMS = 1; TRST = 1; TDO = X;}\n",
+      //                         "   V { TCK = 0; TDI = 0; TMS = 1; TRST = 1; TDO = X;}\n",
+      //                         "   V { TCK = 0; TDI = 0; TMS = 1; TRST = 0; TDO = X;}\n",
+      //                         "   //Out of reset DUT \n"});
+      //   $fdisplay(stil_fd,stil_str);
+      //end //if(gen_stil_file == `ON)
 
       jtag_vi.master_mp.posedge_cb.tms <= 1;
+      
+      stil_str = "tms = 1;";
+      call_stil_gen(gen_stil_file,stil_str);
+     
       @(negedge jtag_vi.master_mp.trst);
       forever begin
          seq_item_port.get_next_item( jtag_tx );
@@ -875,14 +944,16 @@ class jtag_driver extends uvm_driver#( jtag_transaction );
          @jtag_vi.master_mp.posedge_cb;
          jtag_vi.master_mp.posedge_cb.tms <= 0;
 
+         stil_str = "tms = 0;";
+         call_stil_gen(gen_stil_file,stil_str);
+
          fsm_nstate = "take jtag fsm into run_test_idle state ";
          `uvm_info( "jtag_driver", { fsm_nstate }, UVM_DEBUG );
 
-         if(gen_stil_file == `ON)begin
-            stil_str = $sformatf({"   //take jtag fsm into run_test_idle state\n",
+         stil_str = $sformatf({"   //take jtag fsm into run_test_idle state\n",
                                   "   V { TCK = P; TDI = 0; TMS = 0; TRST = 0; TDO = X;}\n" });
-            $fdisplay(stil_fd,stil_str);
-         end
+         call_stil_gen(gen_stil_file,stil_str);
+         
          //take jtag fsm into select_dr_scan state
          @jtag_vi.master_mp.posedge_cb;
          jtag_vi.master_mp.posedge_cb.tms <= 1;
@@ -890,11 +961,10 @@ class jtag_driver extends uvm_driver#( jtag_transaction );
          fsm_nstate = "take jtag fsm into select_dr_scan state ";
          `uvm_info( "jtag_driver", { fsm_nstate }, UVM_DEBUG );
 
-         if(gen_stil_file == `ON)begin
-            stil_str = $sformatf({"   //take jtag fsm into select_dr_scan state\n",
+         stil_str = $sformatf({"   //take jtag fsm into select_dr_scan state\n",
                                   "   V { TCK = P; TDI = 0; TMS = 1; TRST = 0; TDO = X;}\n" });
-            $fdisplay(stil_fd,stil_str);
-         end
+         call_stil_gen(gen_stil_file,stil_str);
+         
          //take jtag fsm into select_ir_scan state
          @jtag_vi.master_mp.posedge_cb;
          jtag_vi.master_mp.posedge_cb.tms <= 1;
@@ -902,26 +972,21 @@ class jtag_driver extends uvm_driver#( jtag_transaction );
          fsm_nstate = "take jtag fsm into select_ir_scan state ";
          `uvm_info( "jtag_driver", { fsm_nstate }, UVM_DEBUG );
          
-         if(gen_stil_file == `ON)begin
-            stil_str = $sformatf({"   //take jtag fsm into select_ir_scan state\n",
+         stil_str = $sformatf({"   //take jtag fsm into select_ir_scan state\n",
                                   "   V { TCK = P; TDI = 0; TMS = 1; TRST = 0; TDO = X;}\n" });
-            $fdisplay(stil_fd,stil_str);
-         end
-
+         call_stil_gen(gen_stil_file,stil_str);
+         
          //take jtag fsm into capture_ir state
          @jtag_vi.master_mp.posedge_cb;
          jtag_vi.master_mp.posedge_cb.tms <= 0;
          fsm_nstate = "take jtag fsm into capture_ir state ";
          `uvm_info( "jtag_driver", { fsm_nstate }, UVM_DEBUG );
          
-         if(gen_stil_file == `ON)begin
-            stil_str = $sformatf({"   //take jtag fsm into capture_ir state\n",
+         stil_str = $sformatf({"   //take jtag fsm into capture_ir state\n",
                                   "   V { TCK = P; TDI = 0; TMS = 0; TRST = 0; TDO = X;}\n" });
-            $fdisplay(stil_fd,stil_str);
-         end
-
+         call_stil_gen(gen_stil_file,stil_str);
          //take jtag fsm into shift_ir state
-         for(int i = 0; i < `IR_WIDTH; i ++) begin
+         for(int i = 0; i < jtag_tx.o_ir_length; i ++) begin
             @jtag_vi.master_mp.posedge_cb;
             fsm_nstate = "take jtag fsm into shift_ir state ";
             `uvm_info( "jtag_driver", { fsm_nstate }, UVM_DEBUG );
@@ -939,28 +1004,28 @@ class jtag_driver extends uvm_driver#( jtag_transaction );
                else chk_tdo_value = "X";
                stil_str = $sformatf({"   //take jtag fsm into shift_ir state\n",
                                      "   V { TCK = P; TDI = %b; TMS = 0; TRST = 0; TDO = %s;}\n" }, (i != 0) ? jtag_tx.o_ir[i-1] : 1'b0,chk_tdo_value);
-               $fdisplay(stil_fd,stil_str);
+               call_stil_gen(gen_stil_file,stil_str);
             end// if(gen_stil_file == `ON)
-         end //for(int i = 0; i < `IR_WIDTH; i ++) begin
+         end //for(int i = 0; i < jtag_tx.o_ir_length; i ++) begin
 
          //take jtag fsm into exit1_ir state
          @jtag_vi.master_mp.posedge_cb;
          jtag_vi.master_mp.posedge_cb.tms <= 1;
          
          @jtag_vi.master_mp.negedge_cb;
-         jtag_vi.master_mp.negedge_cb.tdi <= jtag_tx.o_ir[`IR_WIDTH-1];
+         jtag_vi.master_mp.negedge_cb.tdi <= jtag_tx.o_ir[jtag_tx.o_ir_length-1];
          
          fsm_nstate = "take jtag fsm into exit1_ir state ";
          `uvm_info( "jtag_driver", { fsm_nstate }, UVM_DEBUG );
          
          if(gen_stil_file == `ON)begin
             if(jtag_tx.chk_ir_tdo) 
-              if(jtag_tx.exp_tdo_ir_queue[`IR_WIDTH-1])  chk_tdo_value = "H";
+              if(jtag_tx.exp_tdo_ir_queue[jtag_tx.o_ir_length-1])  chk_tdo_value = "H";
               else chk_tdo_value = "L";
             else chk_tdo_value = "X";
             stil_str = $sformatf({"   //take jtag fsm into exit1_ir state\n",
-                                  "   V { TCK = P; TDI = %b; TMS = 1; TRST = 0; TDO = %s;}\n" }, jtag_tx.o_ir[`IR_WIDTH-1],chk_tdo_value);
-            $fdisplay(stil_fd,stil_str);
+                                  "   V { TCK = P; TDI = %b; TMS = 1; TRST = 0; TDO = %s;}\n" }, jtag_tx.o_ir[jtag_tx.o_ir_length-1],chk_tdo_value);
+            call_stil_gen(gen_stil_file,stil_str);
          end// if(gen_stil_file == `ON)
 
          //take jtag fsm into update_ir state
@@ -969,32 +1034,27 @@ class jtag_driver extends uvm_driver#( jtag_transaction );
          fsm_nstate = "take jtag fsm into update_ir state ";
          `uvm_info( "jtag_driver", { fsm_nstate }, UVM_DEBUG );
          
-         if(gen_stil_file == `ON)begin
-            stil_str = $sformatf({"   //take jtag fsm into update_ir state\n",
+         stil_str = $sformatf({"   //take jtag fsm into update_ir state\n",
                                   "   V { TCK = P; TDI = 0; TMS = 1; TRST = 0; TDO = X;}\n" });
-            $fdisplay(stil_fd,stil_str);
-         end       
+         call_stil_gen(gen_stil_file,stil_str);
+         
          //take jtag fsm into select_dr_scan state
          @jtag_vi.master_mp.posedge_cb;
          jtag_vi.master_mp.posedge_cb.tms <= 1;
          fsm_nstate = "take jtag fsm into select_dr_scan state ";
          `uvm_info( "jtag_driver", { fsm_nstate }, UVM_DEBUG );
-         if(gen_stil_file == `ON)begin
-            stil_str = $sformatf({"   //take jtag fsm into select_dr_scan state\n",
+         stil_str = $sformatf({"   //take jtag fsm into select_dr_scan state\n",
                                   "   V { TCK = P; TDI = 0; TMS = 1; TRST = 0; TDO = X;}\n" });
-            $fdisplay(stil_fd,stil_str);
-         end       
+         call_stil_gen(gen_stil_file,stil_str);
          
          //take jtag fsm into capture_dr state
          @jtag_vi.master_mp.posedge_cb;
          jtag_vi.master_mp.posedge_cb.tms <= 0;
          fsm_nstate = "take jtag fsm into capture_dr state ";
          `uvm_info( "jtag_driver", { fsm_nstate }, UVM_DEBUG );
-         if(gen_stil_file == `ON)begin
-            stil_str = $sformatf({"   //take jtag fsm into capture_dr state\n",
+         stil_str = $sformatf({"   //take jtag fsm into capture_dr state\n",
                                   "   V { TCK = P; TDI = 0; TMS = 0; TRST = 0; TDO = X;}\n" });
-            $fdisplay(stil_fd,stil_str);
-         end       
+         call_stil_gen(gen_stil_file,stil_str);
 
          //take jtag fsm into shift_dr state
          for(int i = 0; i < jtag_tx.o_dr_length; i ++) begin
@@ -1015,7 +1075,7 @@ class jtag_driver extends uvm_driver#( jtag_transaction );
                else chk_tdo_value = "X";
                stil_str = $sformatf({"   //take jtag fsm into shift_dr state\n",
                                      "   V { TCK = P; TDI = %b; TMS = 0; TRST = 0; TDO = %s;}\n" }, (i != 0) ? jtag_tx.o_dr[i-1] : 1'b0,chk_tdo_value);
-               $fdisplay(stil_fd,stil_str);
+               call_stil_gen(gen_stil_file,stil_str);
             end// if(gen_stil_file == `ON)
 
          end
@@ -1037,7 +1097,7 @@ class jtag_driver extends uvm_driver#( jtag_transaction );
             else chk_tdo_value = "X";
             stil_str = $sformatf({"   //take jtag fsm into exit1_dr state\n",
                                   "   V { TCK = P; TDI = %b; TMS = 1; TRST = 0; TDO = %s;}\n" }, jtag_tx.o_dr[jtag_tx.o_dr_length-1],chk_tdo_value);
-            $fdisplay(stil_fd,stil_str);
+            call_stil_gen(gen_stil_file,stil_str);
          end// if(gen_stil_file == `ON)
 
        
@@ -1047,24 +1107,21 @@ class jtag_driver extends uvm_driver#( jtag_transaction );
          fsm_nstate = "take jtag fsm into update_dr state ";
          `uvm_info( "jtag_driver", { fsm_nstate }, UVM_DEBUG );
           
-         if(gen_stil_file == `ON)begin
-            stil_str = $sformatf({"   //take jtag fsm into update_dr state\n",
+         stil_str = $sformatf({"   //take jtag fsm into update_dr state\n",
                                   "   V { TCK = P; TDI = 0; TMS = 1; TRST = 0; TDO = X;}\n" });
-            $fdisplay(stil_fd,stil_str);
-         end        
+         call_stil_gen(gen_stil_file,stil_str);
+         
          //take jtag fsm into run_test_idle state
          @jtag_vi.master_mp.posedge_cb;
          jtag_vi.master_mp.posedge_cb.tms <= 0;
          fsm_nstate = "take jtag fsm into run_test_idle state ";
          `uvm_info( "jtag_driver", { fsm_nstate }, UVM_DEBUG );
 
-         if(gen_stil_file == `ON)begin
-            stil_str = $sformatf({"   //take jtag fsm into run_test_idle state\n",
+         stil_str = $sformatf({"   //take jtag fsm into run_test_idle state\n",
                                   "   V { TCK = P; TDI = 0; TMS = 0; TRST = 0; TDO = X;}\n",
                                   "   V { TCK = P; TDI = 0; TMS = 0; TRST = 0; TDO = X;}\n",
                                   "   V { TCK = P; TDI = 0; TMS = 0; TRST = 0; TDO = X;}\n"});
-            $fdisplay(stil_fd,stil_str);
-         end        
+         call_stil_gen(gen_stil_file,stil_str);
          repeat (2) @jtag_vi.master_mp.posedge_cb;
 	     seq_item_port.item_done();
 
@@ -1234,7 +1291,7 @@ class jtag_driver_atpg extends jtag_driver;
          end
 
          //take jtag fsm into shift_ir state
-         for(int i = 0; i < `IR_WIDTH; i ++) begin
+         for(int i = 0; i < jtag_tx.o_ir_length; i ++) begin
             @jtag_vi.master_mp.posedge_cb;
             fsm_nstate = "take jtag fsm into shift_ir state ";
             `uvm_info( "jtag_driver_atpg", { fsm_nstate }, UVM_DEBUG );
@@ -1254,25 +1311,25 @@ class jtag_driver_atpg extends jtag_driver;
                                      "   V { BP_TCK = P; BP_TDI = %b; BP_TMS = 0; BP_TRST_L = 1; BP_TDO = %s;}\n" }, (i != 0) ? jtag_tx.o_ir[i-1] : 1'b0,chk_tdo_value);
                $fdisplay(stil_fd,stil_str);
             end// if(gen_stil_file == `ON)
-         end //for(int i = 0; i < `IR_WIDTH; i ++) begin
+         end //for(int i = 0; i < jtag_tx.o_ir_length; i ++) begin
 
          //take jtag fsm into exit1_ir state
          @jtag_vi.master_mp.posedge_cb;
          jtag_vi.master_mp.posedge_cb.tms <= 1;
          
          @jtag_vi.master_mp.negedge_cb;
-         jtag_vi.master_mp.negedge_cb.tdi <= jtag_tx.o_ir[`IR_WIDTH-1];
+         jtag_vi.master_mp.negedge_cb.tdi <= jtag_tx.o_ir[jtag_tx.o_ir_length-1];
          
          fsm_nstate = "take jtag fsm into exit1_ir state ";
          `uvm_info( "jtag_driver_atpg", { fsm_nstate }, UVM_DEBUG );
          
          if(gen_stil_file == `ON)begin
             if(jtag_tx.chk_ir_tdo) 
-              if(jtag_tx.exp_tdo_ir_queue[`IR_WIDTH-1])  chk_tdo_value = "H";
+              if(jtag_tx.exp_tdo_ir_queue[jtag_tx.o_ir_length-1])  chk_tdo_value = "H";
               else chk_tdo_value = "L";
             else chk_tdo_value = "X";
             stil_str = $sformatf({"   //take jtag fsm into exit1_ir state\n",
-                                  "   V { BP_TCK = P; BP_TDI = %b; BP_TMS = 1; BP_TRST_L = 1; BP_TDO = %s;}\n" }, jtag_tx.o_ir[`IR_WIDTH-1],chk_tdo_value);
+                                  "   V { BP_TCK = P; BP_TDI = %b; BP_TMS = 1; BP_TRST_L = 1; BP_TDO = %s;}\n" }, jtag_tx.o_ir[jtag_tx.o_ir_length-1],chk_tdo_value);
             $fdisplay(stil_fd,stil_str);
          end// if(gen_stil_file == `ON)
 
@@ -1403,11 +1460,12 @@ typedef uvm_sequencer #(dft_register_transaction) dft_register_sequencer;
 
 class dft_register_adapter extends uvm_reg_adapter;
    `uvm_object_utils( dft_register_adapter )
-
+   const string      report_id;
    function new( string name = "" );
       super.new( name );
       supports_byte_enable = 0;
       provides_responses   = 0;
+      report_id = name;
    endfunction: new
 
    virtual function uvm_sequence_item reg2bus( const ref uvm_reg_bus_op rw );
@@ -1441,6 +1499,7 @@ class dft_register_adapter extends uvm_reg_adapter;
          end
       end
 
+      `uvm_info( "dft_reg_adapter",{dft_reg_tx.convert2string}, UVM_MEDIUM);
       return dft_reg_tx;
    endfunction: reg2bus
    
@@ -1498,15 +1557,18 @@ class ieee_1149_1_reg_adapter extends uvm_reg_adapter;
          jtag_tx.chk_ir_tdo = extension.chk_ir_tdo;
          jtag_tx.chk_dr_tdo = extension.chk_dr_tdo;
 
-         foreach(extension.exp_tdo_ir[i])
-            jtag_tx.exp_tdo_ir_queue = {jtag_tx.exp_tdo_ir_queue,extension.exp_tdo_ir[i]};
+         foreach(extension.exp_tdo_ir_q[i])
+            jtag_tx.exp_tdo_ir_queue = {jtag_tx.exp_tdo_ir_queue,extension.exp_tdo_ir_q[i]};
          
-         foreach(extension.exp_tdo_dr[i])
-            jtag_tx.exp_tdo_dr_queue = {jtag_tx.exp_tdo_dr_queue,extension.exp_tdo_dr[i]};
+         foreach(extension.exp_tdo_dr_q[i])
+            jtag_tx.exp_tdo_dr_queue = {jtag_tx.exp_tdo_dr_queue,extension.exp_tdo_dr_q[i]};
       end
 
-      jtag_tx.protocol = IEEE_1149_1;
-      jtag_tx.o_ir = rw.addr;
+      //jtag_tx.protocol = IEEE_1149_1;
+      jtag_tx.o_ir_length = `IEEE_1149_IR_WIDTH;
+      jtag_tx.o_ir = new[jtag_tx.o_ir_length];
+      foreach(jtag_tx.o_ir[i]) jtag_tx.o_ir[i] = rw.addr[i];
+
       jtag_tx.o_dr_length = rw.data[`MAX_DR_WIDTH-1 : 0];
       jtag_tx.o_dr = new[jtag_tx.o_dr_length];
       for( int i = 0; i < jtag_tx.o_dr_length; i++) begin
@@ -1602,6 +1664,16 @@ class stil_generator extends uvm_subscriber #( stil_info_transaction );
    bit         clk_drv_active;
    bit         reset_drv_active;
    bit         pad_drv_active;
+   bit         write_to_file; 
+   string      jtag_drv_info;
+   string      clk_drv_info;
+   string      reset_drv_info;
+   string      pad_drv_info;
+   
+   stil_info_transaction      pad_stil_info_tx,pad_stil_info_tx_pre;
+   stil_info_transaction      reset_stil_info_tx,reset_stil_info_tx_pre;
+   stil_info_transaction      clk_stil_info_tx,clk_stil_info_tx_pre;
+   stil_info_transaction      jtag_stil_info_tx,jtag_stil_info_tx_pre;
 
    function new( string name, uvm_component parent );
       super.new( name, parent );
@@ -1616,19 +1688,108 @@ class stil_generator extends uvm_subscriber #( stil_info_transaction );
    endfunction: build_phase
    
    function void write( stil_info_transaction t);
+      reset_stil_info_tx = t; 
+      reset_drv_active = 1;
    endfunction: write
  
    function void write_jtag_drv( stil_info_transaction t);
+      jtag_stil_info_tx = t; 
+      jtag_drv_active = 1;
+      $display("write_jtag_drv");
    endfunction: write_jtag_drv
    
    function void write_clk_drv( stil_info_transaction t);
+      clk_stil_info_tx = t; 
+      $display("write_clk_drv");
+      clk_drv_active = 1;
    endfunction: write_clk_drv
    
    function void write_pad_drv( stil_info_transaction t);
+      pad_stil_info_tx = t; 
+      pad_drv_active = 1;
    endfunction: write_pad_drv
+   
+   task run_phase(uvm_phase phase);
+      string            stil_str;
+      int               stil_fd;
+      
+      stil_fd = $fopen("jtag_1149_1_test.stil", "w");
+      forever begin
+         if(jtag_stil_info_tx != null) begin
+            if(jtag_stil_info_tx_pre == null) begin
+               jtag_stil_info_tx_pre = stil_info_transaction::type_id::create("jtag_stil_info_tx_pre");
+               $cast(jtag_stil_info_tx_pre, jtag_stil_info_tx.clone());
+               stil_str = {stil_str,jtag_stil_info_tx_pre.stil_info};
+               $display(stil_str);
+               write_to_file = 1;
+            end
+            else if(jtag_stil_info_tx_pre.time_stamp != jtag_stil_info_tx.time_stamp) begin
+               $cast(jtag_stil_info_tx_pre, jtag_stil_info_tx.clone());
+               stil_str = {stil_str,jtag_stil_info_tx_pre.stil_info};
+               $display(stil_str);
+               write_to_file = 1;
+            end
+         end
+         if(clk_stil_info_tx != null) begin
+            if(clk_stil_info_tx_pre == null) begin
+               clk_stil_info_tx_pre = stil_info_transaction::type_id::create("clk_stil_info_tx_pre");
+               $cast(clk_stil_info_tx_pre, clk_stil_info_tx.clone());
+               stil_str = {stil_str,clk_stil_info_tx_pre.stil_info};
+               write_to_file = 1;
+               $display(stil_str);
+            end
+            else if(clk_stil_info_tx_pre.time_stamp != clk_stil_info_tx.time_stamp) begin
+               $cast(clk_stil_info_tx_pre, clk_stil_info_tx.clone());
+               stil_str = {stil_str,clk_stil_info_tx_pre.stil_info};
+               write_to_file = 1;
+               $display(stil_str);
+            end
+         end
+
+         if(pad_stil_info_tx != null) begin
+            if(pad_stil_info_tx_pre == null) begin
+               pad_stil_info_tx_pre = stil_info_transaction::type_id::create("pad_stil_info_tx_pre");
+               $cast(pad_stil_info_tx_pre, pad_stil_info_tx.clone());
+               stil_str = {stil_str,pad_stil_info_tx_pre.stil_info};
+               $display(stil_str);
+               write_to_file = 1;
+            end
+            else if(pad_stil_info_tx_pre.time_stamp != pad_stil_info_tx.time_stamp) begin
+               $cast(pad_stil_info_tx_pre, pad_stil_info_tx.clone());
+               stil_str = {stil_str,pad_stil_info_tx_pre.stil_info};
+               $display(stil_str);
+               write_to_file = 1;
+            end
+         end
+
+         if(reset_stil_info_tx != null) begin
+            if(reset_stil_info_tx_pre == null) begin
+               reset_stil_info_tx_pre = stil_info_transaction::type_id::create("reset_stil_info_tx_pre");
+               $cast(reset_stil_info_tx_pre, reset_stil_info_tx.clone());
+               stil_str = {stil_str,reset_stil_info_tx_pre.stil_info};
+               $display(stil_str);
+               write_to_file = 1;
+            end
+            else if(reset_stil_info_tx_pre.time_stamp != reset_stil_info_tx.time_stamp) begin
+               $cast(reset_stil_info_tx_pre, reset_stil_info_tx.clone());
+               stil_str = {stil_str,reset_stil_info_tx_pre.stil_info};
+               $display(stil_str);
+               write_to_file = 1;
+            end
+         end
+
+         if(write_to_file) begin
+            $display(stil_str);
+            $fdisplay(stil_fd,stil_str);
+            write_to_file = 0;
+            stil_str = "";
+            #1;
+         end 
+      end
+   endtask: run_phase
 endclass:stil_generator
 
-
+   
 //---------------------------------------------------------------------------
 // Class: jtag_scoreboard
 //---------------------------------------------------------------------------
@@ -1690,9 +1851,11 @@ endclass:dft_register_map
    
 class dft_reg_tx_to_jtag_tx_sequence extends uvm_sequence#( jtag_transaction);
    `uvm_object_utils( dft_reg_tx_to_jtag_tx_sequence )
+   const string          report_id;
 
    function new( string name = "" );
       super.new( name );
+      report_id = name;
    endfunction: new
 
    uvm_sequencer  #(dft_register_transaction)   up_sequencer;
@@ -1710,11 +1873,12 @@ class dft_reg_tx_to_jtag_tx_sequence extends uvm_sequence#( jtag_transaction);
       bit[`IEEE_1149_IR_WIDTH-1:0]                 ir = `I1687_OPCODE; 
       bit                                          sel_wir,sel_wir_2nd; 
       bit                                          temp_dr_q[$]; 
+      jtag_transaction                             jtag_tx;
 
       jtag_tx = jtag_transaction::type_id::create( .name("jtag_tx") );
       sib = dft_reg_tx.address[`SIB_WIDTH-1:0];
       lvl1_sib = sib[`LVL1SIB_WIDTH-1:0]; 
-      lvl2_sib = sib[`LVL2SIB_WIDTH-1:`LVL1SIB_WIDTH]; 
+      lvl2_sib = sib[`LVL2SIB_WIDTH-1+`LVL1SIB_WIDTH:`LVL1SIB_WIDTH]; 
       //-----------------------------------
       //1149 TDR
       //-----------------------------------
@@ -1732,10 +1896,9 @@ class dft_reg_tx_to_jtag_tx_sequence extends uvm_sequence#( jtag_transaction);
          jtag_tx_q[0].chk_ir_tdo       = dft_reg_tx.extension.chk_ir_tdo;
          jtag_tx_q[0].chk_dr_tdo       = dft_reg_tx.extension.chk_dr_tdo;
          jtag_tx_q[0].exp_tdo_dr_queue = dft_reg_tx.extension.exp_tdo_dr_q; 
-         jtag_tx_q[0].exp_tdo_dr_mask_queue = {jtag_tx_q[0].o_dr_length{1'b1}}; 
+         foreach(jtag_tx_q[0].exp_tdo_dr_queue[i]) jtag_tx_q[0].exp_tdo_dr_mask_queue[i] = 1'b1;
          jtag_tx_q[0].exp_tdo_ir_queue = dft_reg_tx.extension.exp_tdo_ir_q; 
-         end
-      end//if(dft_reg_tx.address[`SIB_WIDTH-1:0] == `SIB_WIDTH'h0) begin
+      end//if(sib == `SIB_WIDTH'h0) begin
       //-----------------------------------
       //1500 TDR 
       //-----------------------------------
@@ -1814,8 +1977,8 @@ class dft_reg_tx_to_jtag_tx_sequence extends uvm_sequence#( jtag_transaction);
             sel_wir = 0;
             sel_wir_2nd = 0;
             case(lvl2_sib)
-               `LVL2SIB_WIDTH'b01: temp_dr_q = {lvl1_sib[0],sel_wir,lvl2_sib[0],sel_wir_2nd,dft_reg_tx.address[`IEEE_1500_IR_WIDTH+`SIB_WIDTH-1:`SIB_WIDTH],lvl2_sib[1],lvl1_sib[1]};
-               `LVL2SIB_WIDTH'b10: temp_dr_q = {lvl1_sib[0],sel_wir,lvl2_sib,sel_wir_2nd,dft_reg_tx.address[`IEEE_1500_IR_WIDTH+`SIB_WIDTH-1:`SIB_WIDTH],lvl1_sib[1]};
+               `LVL2SIB_WIDTH'b01: temp_dr_q = {lvl1_sib[0],sel_wir,lvl2_sib[0],sel_wir_2nd,dft_reg_tx.address[`IEEE_1500_IR_WIDTH-1:`SIB_WIDTH],lvl2_sib[1],lvl1_sib[1]};
+               `LVL2SIB_WIDTH'b10: temp_dr_q = {lvl1_sib[0],sel_wir,lvl2_sib,sel_wir_2nd,dft_reg_tx.address[`IEEE_1500_IR_WIDTH-1:`SIB_WIDTH],lvl1_sib[1]};
             endcase
             foreach(temp_dr_q[i])jtag_tx.o_dr[i] = temp_dr_q[i];
             jtag_tx_q[3] = jtag_transaction::type_id::create("jtag_tx_q[3]");
@@ -1848,6 +2011,8 @@ class dft_reg_tx_to_jtag_tx_sequence extends uvm_sequence#( jtag_transaction);
   
    task body();
       up_sequencer.get_next_item(dft_reg_tx);
+      `uvm_info( report_id,{dft_reg_tx.convert2string}, UVM_MEDIUM);
+      
       dft_reg_tx_to_jtag_tx(dft_reg_tx,jtag_tx_q);
       foreach(jtag_tx_q[i]) begin
          start_item( jtag_tx_q[i] );
@@ -1880,12 +2045,13 @@ class dft_register_layering extends uvm_scoreboard;
    dft_register_monitor      dft_reg_mon;
    dft_register_adapter      dft_reg_adptr;
    dft_register_sequencer    dft_reg_sqr;
-   jtag_configuration   jtag_cfg;
-   jtag_agent           agent;
+   jtag_configuration        jtag_cfg;
+   jtag_agent                agent;
    
    function void build_phase( uvm_phase phase );
       super.build_phase( phase );
 
+      jtag_ap = new( .name("jtag_ap"), .parent(this) );
       dft_reg_prdctr = dft_register_predictor::type_id::create(.name( "dft_reg_prdctr" ), .parent(this));
       dft_reg_map = dft_register_map::type_id::create(.name( "dft_reg_map" ), .parent(this));
       dft_reg_mon = dft_register_monitor::type_id::create(.name( "dft_reg_mon" ), .parent(this));

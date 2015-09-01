@@ -30,8 +30,8 @@ module top;
    //end
   
    initial begin // waveform
-      //$vcdpluson;
-      $dumpfile( "dump.vcd" );
+      $vcdpluson;
+      //$dumpfile( "dump.vcd" );
       $dumpvars( 0, top );
    end
    
