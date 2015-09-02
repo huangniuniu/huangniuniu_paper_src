@@ -1,3 +1,7 @@
+
+`uvm_analysis_imp_decl(_jtag_drv)
+`uvm_analysis_imp_decl(_clk_drv)
+`uvm_analysis_imp_decl(_pad_drv)
 //---------------------------------------------------------------------------
 // Class: sib_node 
 //---------------------------------------------------------------------------
@@ -1650,9 +1654,6 @@ endclass:jtag_agent
 //---------------------------------------------------------------------------
 // Class: stil_generator
 //---------------------------------------------------------------------------
-`uvm_analysis_imp_decl(_jtag_drv)
-`uvm_analysis_imp_decl(_clk_drv)
-`uvm_analysis_imp_decl(_pad_drv)
 class stil_generator extends uvm_subscriber #( stil_info_transaction );
    `uvm_component_utils( stil_generator )
 
