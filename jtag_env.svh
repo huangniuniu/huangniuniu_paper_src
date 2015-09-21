@@ -49,6 +49,16 @@ class caught_data extends uvm_object;
      super.new(name);
    endfunction : new
     
+   function string convert2string();
+       string       s;
+       $sformat(s, "%s\n***************caught_data**********",s);
+       $sformat(s, "%s\n caught_1149_reg = \t%0d \n caught_1500_reg = \t%0d \n reg_addr = \t%h ",s, caught_1149_reg, caught_1500_reg, reg_addr);
+       $sformat(s, "\n ///////////////reg_data_q//////////////////////////\n" );
+       foreach( reg_data_q[i] )
+            $sformat(s, "%s%0b",s,reg_data_q[$-i] );
+       $sformat(s, "%s\n***************caught_data**********",s);
+       return s;
+   endfunction: convert2string
 endclass : caught_data
 
 
@@ -129,13 +139,34 @@ class jtag_transaction extends uvm_sequence_item;
     function string convert2string();
         string       s;
         int unsigned hex_value;
-        int unsigned four_bits_num = o_dr_length / 4;
-        int unsigned remainder = o_dr_length % 4;
+        int unsigned four_bits_num = o_ir_length / 4;
+        int unsigned remainder = o_ir_length % 4;
 
         s = super.convert2string();
         
-        $sformat(s, "%s\n ////////////////////////////////////////////////////////////\n jtag_transaction\n o_ir_length \t%8b\n o_dr_length \t%0d\n o_dr \t",s, o_ir_length, o_dr_length);
+        $sformat(s, "%s\n ********************jtag_transaction*****",s );
+        $sformat(s, "%s\n o_ir = %0d'h",s, o_ir_length);
          
+       
+        if (remainder != 0) begin
+            if (remainder == 1)
+                hex_value = o_ir[four_bits_num*4];
+            else if (remainder == 2)
+                hex_value = o_ir[four_bits_num*4 + 1] *2 + o_ir[four_bits_num*4];
+            else if (remainder == 3)
+                hex_value = o_ir[four_bits_num*4 + 2] *4 + o_ir[four_bits_num*4 + 1] *2 + o_ir[four_bits_num*4];
+            $sformat(s, "%s%0h",s,hex_value);
+        end 
+        
+        for ( int i = 0; i < four_bits_num; i++) begin
+            hex_value = o_ir[i*4+3] *8 + o_ir[i*4+2] *4 + o_ir[i*4+1] *2 + o_ir[i*4];
+            $sformat(s, "%s%0h",s,hex_value);
+        end
+        
+        $sformat(s, "%s\n o_dr = %0d'h",s, o_dr_length);
+
+        four_bits_num = o_dr_length / 4;
+        remainder = o_dr_length % 4;
         if (remainder != 0) begin
             if (remainder == 1)
                 hex_value = o_dr[four_bits_num*4];
@@ -150,26 +181,9 @@ class jtag_transaction extends uvm_sequence_item;
             hex_value = o_dr[i*4+3] *8 + o_dr[i*4+2] *4 + o_dr[i*4+1] *2 + o_dr[i*4];
             $sformat(s, "%s%0h",s,hex_value);
         end
-        
-        four_bits_num = o_ir_length / 4;
-        remainder = o_ir_length % 4;
-        if (remainder != 0) begin
-            if (remainder == 1)
-                hex_value = o_ir[four_bits_num*4];
-            else if (remainder == 2)
-                hex_value = o_ir[four_bits_num*4 + 1] *2 + o_ir[four_bits_num*4];
-            else if (remainder == 3)
-                hex_value = o_ir[four_bits_num*4 + 2] *4 + o_ir[four_bits_num*4 + 1] *2 + o_ir[four_bits_num*4];
-            $sformat(s, "%s%0h",s,hex_value);
-        end 
-        
-        for ( int i = 0; i < four_bits_num; i++) begin
-            hex_value = o_dr[i*4+3] *8 + o_dr[i*4+2] *4 + o_dr[i*4+1] *2 + o_dr[i*4];
-            $sformat(s, "%s%0h",s,hex_value);
-        end
  
         $sformat(s, "%s\n chk_ir_tdo = \t%d\n chk_dr_tdo = \t%d\n",s,  chk_ir_tdo, chk_dr_tdo);
-        $sformat(s, "%s\n ////////////////////////////////////////////////////////////\n",s);
+        $sformat(s, "%s\n ********************jtag_transaction*****",s );
         return s;
     endfunction: convert2string
 
@@ -209,6 +223,34 @@ class jtag_transaction extends uvm_sequence_item;
        end
        return s;
     endfunction: print_queue
+
+    virtual function void do_copy( uvm_object rhs );
+       jtag_transaction       that;
+
+       if ( ! $cast( that, rhs ) ) begin
+          `uvm_error( get_name(), "rhs is not a jtag_transaction" )
+          return;
+       end
+
+       super.do_copy( rhs );
+       this.o_ir                    = that.o_ir                   ;            
+       this.o_dr_length             = that.o_dr_length            ; 
+       this.o_ir_length             = that.o_ir_length            ; 
+       this.o_dr                    = that.o_dr                   ; 
+       this.tdo_dr_queue            = that.tdo_dr_queue           ; 
+       this.tdo_ir_queue            = that.tdo_ir_queue           ; 
+       this.tdi_dr_queue            = that.tdi_dr_queue           ; 
+       this.tdi_ir_queue            = that.tdi_ir_queue           ; 
+       this.chk_ir_tdo              = that.chk_ir_tdo             ; 
+       this.chk_dr_tdo              = that.chk_dr_tdo             ; 
+       this.exp_tdo_dr_queue        = that.exp_tdo_dr_queue       ; 
+       this.exp_tdo_dr_mask_queue   = that.exp_tdo_dr_mask_queue  ; 
+       this.exp_tdo_ir_queue        = that.exp_tdo_ir_queue       ; 
+       this.read_not_write          = that.read_not_write         ; 
+
+    endfunction: do_copy
+
+
 endclass:jtag_transaction
 
 //------------------------------------------------------------------------------
@@ -228,6 +270,21 @@ class stil_info_transaction extends uvm_sequence_item;
         $sformat(s, "%s\n stil_info = \t%s \n time_stamp = \t%d ",s, stil_info, time_stamp);
         return s;
     endfunction
+
+    virtual function void do_copy( uvm_object rhs );
+       stil_info_transaction        that;
+
+       if ( ! $cast( that, rhs ) ) begin
+          `uvm_error( get_name(), "rhs is not a stil_info_transaction" )
+          return;
+       end
+
+       super.do_copy( rhs );
+       this.stil_info  = that.stil_info;            
+       this.time_stamp = that.time_stamp;            
+    endfunction: do_copy
+
+
  endclass: stil_info_transaction    
 
 //------------------------------------------------------------------------------
@@ -249,17 +306,19 @@ class dft_register_transaction extends uvm_sequence_item;
 
     function string convert2string();
         string       s;
+        $sformat(s, "%s\n ********************dft_register_transaction*****\n",s );
         $sformat(s, "%s\n read_not_write = \t%d \n address = \t%h \n reg_length = \t%d\n",s, read_not_write, address, reg_length);
         
-        $sformat(s, "\n ///////////////wr_data_q//////////////////////////\n" );
+        $sformat(s, "%s\n ///////////////wr_data_q//////////////////////////\n",s );
         foreach( wr_data_q[i] )
             $sformat(s, "%s%0b",s,wr_data_q[$-i] );
         $sformat(s, "%s\n /////////////////////////////////////////////////////\n",s);
         
-        $sformat(s, "\n ///////////////rd_data_q//////////////////////////\n" );
+        $sformat(s, "%s\n ///////////////rd_data_q//////////////////////////\n",s );
         foreach( rd_data_q[i] )
             $sformat(s, "%s%0b",s,rd_data_q[$-i] );
         $sformat(s, "%s\n /////////////////////////////////////////////////////\n",s);
+        $sformat(s, "%s\n ********************dft_register_transaction*****\n",s );
       
       
         return s;
@@ -284,7 +343,7 @@ class dft_register_monitor extends uvm_subscriber #(jtag_transaction);
    reg_node                         wir[`IEEE_1500_IR_WIDTH], wdr_dynmc[]; 
    reg_node                         cascd_wir[`IEEE_1500_IR_WIDTH], cascd_wdr_dynmc[];
    string                           temp_name;
-   
+   string                           report_id = "dft_register_monitor"; 
    function new( string name, uvm_component parent );
       super.new( name, parent );
    endfunction: new
@@ -328,10 +387,11 @@ class dft_register_monitor extends uvm_subscriber #(jtag_transaction);
       
       if(temp_ir == `I1687_OPCODE) begin
 
-         //cght_data = new("cght_data"); 
+         cght_data = new("cght_data"); 
          
          cght_data = dft_tdr_network(t); 
 
+         `uvm_info( report_id,{ cght_data.convert2string }, UVM_DEBUG );
          dft_reg_tx = dft_register_transaction::type_id::create("dft_reg_tx");
          
          dft_reg_tx.read_not_write = t.read_not_write;
@@ -864,71 +924,6 @@ class jtag_driver extends uvm_driver#( jtag_transaction );
       string            stil_str;
       //int               stil_fd;
       string            chk_tdo_value;
-      //For STIL convertion
-      //if(gen_stil_file == `ON)begin
-      //   stil_fd = $fopen("jtag_1149_1_test.stil", "a");
-      //   //Header
-      //   stil_str = $sformatf({"STIL1.0\n",
-      //                         "Header{\n",
-      //                         "  (Title %s )\n",
-      //                         //"  (Date %t )\n",
-      //                         "}\n"}, stil_file_name);
-      //   $fdisplay(stil_fd,stil_str);
-      //   
-      //   //Signals
-      //   stil_str = $sformatf({"Signals { \n",
-      //                         "  TDO      Out;\n",
-      //                         "  TCK       In;\n",
-      //                         "  TRST      In;\n",
-      //                         "  TDI       In;\n",
-      //                         "  TMS       In;\n",
-      //                      "}\n"});
-      //   $fdisplay(stil_fd,stil_str);
-
-      //   //Timing
-      //   stil_str = $sformatf({"Timing \"TCK_DOMAIN\"{\n",
-      //                         "  WaveformTable base {\n",
-      //                         "     Period'%d';\n",
-      //                         "       Waveforms {\n",
-      //                         "          TCK  { 0P { '0ns' D; '%dns' D/U; '%dns' D; }}\n",
-      //                         "          TDI  { 01 { '0ns' D; }}\n",
-      //                         "          TMS  { 01 { '0ns' D; }}\n",
-      //                         "          TRST { 01 { '0ns' D; }}\n",
-      //                         "          TDO  { LHX { '0ns' Z; '%dns' L/H/X;}}\n",
-      //                         "       }\n",
-      //                         "  }//WaveformTable\n",
-      //                        "}//Timing\n"},tck_half_period*2,tck_half_period,tck_half_period/2+tck_half_period,tck_half_period/2+tck_half_period/4);
-      //   $fdisplay(stil_fd,stil_str);
-
-      //   //PatternBurst
-      //   stil_str = $sformatf({"PatternBurst \"%s\" {\n",
-      //                         "    PatList { \" test_sequence\"; }\n",
-      //                         "    }\n",
-      //                         "}\n"},stil_file_name);
-      //   $fdisplay(stil_fd,stil_str);
-      //   
-      //   //PatternExec
-      //   stil_str = $sformatf({"PatternExec {\n",
-      //                         "    Timing  \" TCK_DOMAIN\";\n",
-      //                         "    PatternBurst \" %s\";\n",
-      //                         "}\n"},stil_file_name);
-      //   $fdisplay(stil_fd,stil_str);
-
-      //   //Pattern
-      //   stil_str = $sformatf({"Pattern test_sequence {\n",
-      //                         "   //Reset DUT \n",
-      //                         "   V { TCK = 0; TDI = 0; TMS = 1; TRST = 1; TDO = X;}\n",
-      //                         "   V { TCK = 0; TDI = 0; TMS = 1; TRST = 1; TDO = X;}\n",
-      //                         "   V { TCK = 0; TDI = 0; TMS = 1; TRST = 1; TDO = X;}\n",
-      //                         "   V { TCK = 0; TDI = 0; TMS = 1; TRST = 1; TDO = X;}\n",
-      //                         "   V { TCK = 0; TDI = 0; TMS = 1; TRST = 1; TDO = X;}\n",
-      //                         "   V { TCK = 0; TDI = 0; TMS = 1; TRST = 1; TDO = X;}\n",
-      //                         "   V { TCK = 0; TDI = 0; TMS = 1; TRST = 1; TDO = X;}\n",
-      //                         "   V { TCK = 0; TDI = 0; TMS = 1; TRST = 0; TDO = X;}\n",
-      //                         "   //Out of reset DUT \n"});
-      //   $fdisplay(stil_fd,stil_str);
-      //end //if(gen_stil_file == `ON)
-
       jtag_vi.master_mp.posedge_cb.tms <= 1;
       
       stil_str = "tms = 1;";
@@ -958,6 +953,11 @@ class jtag_driver extends uvm_driver#( jtag_transaction );
                                   "   V { TCK = P; TDI = 0; TMS = 0; TRST = 0; TDO = X;}\n" });
          call_stil_gen(gen_stil_file,stil_str);
          
+         //read_not_write is used for monitor only
+         @jtag_vi.master_mp.negedge_cb;
+         jtag_vi.master_mp.negedge_cb.read_not_write <= jtag_tx.read_not_write;
+
+
          //take jtag fsm into select_dr_scan state
          @jtag_vi.master_mp.posedge_cb;
          jtag_vi.master_mp.posedge_cb.tms <= 1;
@@ -1491,16 +1491,14 @@ class dft_register_adapter extends uvm_reg_adapter;
       dft_reg_tx.address = rw.addr;
       dft_reg_tx.read_not_write = (rw.kind == UVM_READ);
 
-      if(rw.kind == UVM_WRITE) begin
-         if(ext_wr_data_length == 0) begin
-            for(int i=0; i<rw.n_bits; i++)  dft_reg_tx.wr_data_q = {dft_reg_tx.wr_data_q, rw.data[i]}; 
-            dft_reg_tx.reg_length = rw.n_bits;
-         end 
-         else begin
-            for(int i=0; i<rw.n_bits; i++)  dft_reg_tx.wr_data_q = {dft_reg_tx.wr_data_q, rw.data[i]}; 
-            dft_reg_tx.wr_data_q = {dft_reg_tx.wr_data_q, extension.wr_data_q};
-            dft_reg_tx.reg_length = rw.n_bits + ext_wr_data_length;
-         end
+      if(ext_wr_data_length == 0) begin
+         for(int i=0; i<rw.n_bits; i++)  dft_reg_tx.wr_data_q = {dft_reg_tx.wr_data_q, rw.data[i]}; 
+         dft_reg_tx.reg_length = rw.n_bits;
+      end 
+      else begin
+         for(int i=0; i<rw.n_bits; i++)  dft_reg_tx.wr_data_q = {dft_reg_tx.wr_data_q, rw.data[i]}; 
+         dft_reg_tx.wr_data_q = {dft_reg_tx.wr_data_q, extension.wr_data_q};
+         dft_reg_tx.reg_length = rw.n_bits + ext_wr_data_length;
       end
 
       `uvm_info( "dft_reg_adapter",{dft_reg_tx.convert2string}, UVM_MEDIUM);
@@ -1696,12 +1694,10 @@ class stil_generator extends uvm_subscriber #( stil_info_transaction );
    function void write_jtag_drv( stil_info_transaction t);
       jtag_stil_info_tx = t; 
       jtag_drv_active = 1;
-      $display("write_jtag_drv");
    endfunction: write_jtag_drv
    
    function void write_clk_drv( stil_info_transaction t);
       clk_stil_info_tx = t; 
-      $display("write_clk_drv");
       clk_drv_active = 1;
    endfunction: write_clk_drv
    
@@ -1721,7 +1717,7 @@ class stil_generator extends uvm_subscriber #( stil_info_transaction );
                jtag_stil_info_tx_pre = stil_info_transaction::type_id::create("jtag_stil_info_tx_pre");
                $cast(jtag_stil_info_tx_pre, jtag_stil_info_tx.clone());
                stil_str = {stil_str,jtag_stil_info_tx_pre.stil_info};
-               $display(stil_str);
+               $display({"STIL_GEN",stil_str});
                write_to_file = 1;
             end
             else if(jtag_stil_info_tx_pre.time_stamp != jtag_stil_info_tx.time_stamp) begin
@@ -1786,6 +1782,7 @@ class stil_generator extends uvm_subscriber #( stil_info_transaction );
             stil_str = "";
             #1;
          end 
+         else #1;
       end
    endtask: run_phase
 endclass:stil_generator

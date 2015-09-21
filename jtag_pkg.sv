@@ -16,12 +16,12 @@ typedef enum bit[3:0] { TEST_LOGIC_RESET, RUN_TEST_IDLE, SELECT_DR_SCAN, CAPTURE
 `define   MAX_DR_WIDTH        32
 `define   IEEE_1149_IR_WIDTH  8
 `define   IEEE_1500_IR_WIDTH  10 
-`define   DFT_REG_ADDR_WIDTH  `IEEE_1500_IR_WIDTH
 `define   LVL1SIB_WIDTH       2 
 `define   LVL2SIB_WIDTH       2 
 //`define   SIB_WIDTH           (`LVL1SIB_WIDTH + `LVL2SIB_WIDTH 
 `define   SIB_WIDTH           4
-`define   MAX_N_BYTES         128
+`define   DFT_REG_ADDR_WIDTH  `IEEE_1500_IR_WIDTH + `SIB_WIDTH
+`define   MAX_N_BYTES         10 
 `define   TEST_LOGIC_RESET    4'h0
 `define   RUN_TEST_IDLE       4'h1
 `define   SELECT_DR_SCAN      4'h2

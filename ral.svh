@@ -3,7 +3,8 @@
 `define SCANCONFIG_OPCODE         `IEEE_1500_IR_WIDTH'h24
 `define SCANCONFIG_LENGTH         14
 `define SCANCONFIG_RST_VALUE      `SCANCONFIG_LENGTH'h6c
-`define SCANCONFIG_ADDR           {`SCANCONFIG_OPCODE,`SIB_WIDTH'b0010} 
+//`define SCANCONFIG_ADDR           {`SCANCONFIG_OPCODE,`SIB_WIDTH'b0010} 
+`define SCANCONFIG_ADDR           `DFT_REG_ADDR_WIDTH'h242  
 
 `define IDCODE_OPCODE         `IEEE_1500_IR_WIDTH'hfc
 `define IDCODE_LENGTH         8
@@ -115,8 +116,9 @@ class ieee1500_sub_client_sib_reg extends uvm_reg;
    `uvm_object_utils( ieee1500_sub_client_sib_reg )
 
    rand uvm_reg_field sub_client_sib;
-      function new( string name = "ieee1500_sub_client_sib_reg" );
-      super.new( .name( name ), .n_bits( `SUB_CLIENT_SIB_LENGTH ), .has_coverage( UVM_NO_COVERAGE ) );
+   
+   function new( string name = "ieee1500_sub_client_sib_reg" );
+   super.new( .name( name ), .n_bits( `SUB_CLIENT_SIB_LENGTH ), .has_coverage( UVM_NO_COVERAGE ) );
    endfunction: new
 
    virtual function void build();
@@ -168,7 +170,8 @@ class dft_register_block extends uvm_reg_block;
       sub_client_sib_reg.configure( .blk_parent( this ) );
       sub_client_sib_reg.build();
 
-      reg_map = create_map( .name( "reg_map" ), .base_addr( `DFT_REG_ADDR_WIDTH'b0 ),.n_bytes( `MAX_N_BYTES ), .endian( UVM_LITTLE_ENDIAN ) );
+      //reg_map = create_map( .name( "reg_map" ), .base_addr( `DFT_REG_ADDR_WIDTH'b0 ),.n_bytes( `MAX_N_BYTES ), .endian( UVM_LITTLE_ENDIAN ) );
+      reg_map = create_map( .name( "dft_reg_map" ), .base_addr( 0 ),.n_bytes( `MAX_N_BYTES ), .endian( UVM_LITTLE_ENDIAN ) );
       reg_map.add_reg( .rg( bypass_reg ), .offset( `BYPASS_ADDR), .rights( "RW" ) );
       reg_map.add_reg( .rg( idcode_reg  ), .offset( `IDCODE_ADDR ), .rights( "RW" ) );
       reg_map.add_reg( .rg( scanconfig_reg), .offset( `SCANCONFIG_ADDR), .rights( "RW" ) );
