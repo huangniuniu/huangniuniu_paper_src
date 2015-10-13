@@ -11,7 +11,7 @@ typedef enum bit[3:0] { TEST_LOGIC_RESET, RUN_TEST_IDLE, SELECT_DR_SCAN, CAPTURE
                         CAPTURE_IR,SHIFT_IR,EXIT1_IR,PAUSE_IR,EXIT2_IR,UPDATE_IR} ieee_1149_1_fsm_e;
 `define   TCK_HALF_PERIOD     20     
 `define   ON                  1
-`define   OFF                 1
+`define   OFF                 0 
 //`define   IR_WIDTH            8
 `define   MAX_DR_WIDTH        32
 `define   IEEE_1149_IR_WIDTH  8
@@ -20,7 +20,7 @@ typedef enum bit[3:0] { TEST_LOGIC_RESET, RUN_TEST_IDLE, SELECT_DR_SCAN, CAPTURE
 `define   LVL2SIB_WIDTH       2 
 //`define   SIB_WIDTH           (`LVL1SIB_WIDTH + `LVL2SIB_WIDTH 
 `define   SIB_WIDTH           4
-`define   DFT_REG_ADDR_WIDTH  `IEEE_1500_IR_WIDTH + `SIB_WIDTH
+`define   DFT_REG_ADDR_WIDTH  `IEEE_1500_IR_WIDTH
 `define   MAX_N_BYTES         10 
 `define   TEST_LOGIC_RESET    4'h0
 `define   RUN_TEST_IDLE       4'h1

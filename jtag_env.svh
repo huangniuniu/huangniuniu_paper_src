@@ -9,13 +9,20 @@ class sib_node extends uvm_object;
    `uvm_object_utils(sib_node)
    bit    in0; 
    bit    in1; 
-   bit    value = value ? in1 : in0;
-   bit    out = value; 
-   
+   bit    value;
+   bit    out;
+  
    function new(string name = "sib_node");
      super.new(name);
    endfunction : new
-    
+   
+   function void out_update ();
+      out = value ? in1 : in0;
+   endfunction: out_update
+   
+   function void value_update ();
+      value = out;
+   endfunction: value_update
 endclass : sib_node
 
 //---------------------------------------------------------------------------
@@ -25,13 +32,20 @@ class reg_node extends uvm_object;
    `uvm_object_utils(reg_node)
    bit    in; 
    bit    is_selwir; 
-   bit    value = in;
-   bit    out = value;
-   
+   bit    value;
+   bit    out;
+  
    function new(string name = "reg_node");
      super.new(name);
    endfunction : new
     
+   function void out_update ();
+      out = in;
+   endfunction: out_update
+    
+   function void value_update ();
+      value = out;
+   endfunction: value_update
 endclass : reg_node
 
 //------------------------------------------------------------------------------
@@ -40,7 +54,7 @@ endclass : reg_node
 //This class is used to store information genrated by 1687 network maintainer.
 class caught_data extends uvm_object;
    `uvm_object_utils(caught_data)
-   bit                              caught_1149_reg; 
+   //bit                              caught_1149_reg; 
    bit                              caught_1500_reg; 
    bit[`DFT_REG_ADDR_WIDTH-1: 0]    reg_addr; 
    bit                              reg_data_q[$];
@@ -51,12 +65,12 @@ class caught_data extends uvm_object;
     
    function string convert2string();
        string       s;
-       $sformat(s, "%s\n***************caught_data**********",s);
-       $sformat(s, "%s\n caught_1149_reg = \t%0d \n caught_1500_reg = \t%0d \n reg_addr = \t%h ",s, caught_1149_reg, caught_1500_reg, reg_addr);
-       $sformat(s, "\n ///////////////reg_data_q//////////////////////////\n" );
+       $sformat(s, "%s\n***************caught_data begin**********",s);
+       $sformat(s, "%s\n caught_1500_reg = %0d \n reg_addr = %h ",s,  caught_1500_reg, reg_addr);
+       $sformat(s, "%s\n reg_data_q = ",s );
        foreach( reg_data_q[i] )
             $sformat(s, "%s%0b",s,reg_data_q[$-i] );
-       $sformat(s, "%s\n***************caught_data**********",s);
+         $sformat(s, "%s\n***************caught_data end**********",s);
        return s;
    endfunction: convert2string
 endclass : caught_data
@@ -144,7 +158,7 @@ class jtag_transaction extends uvm_sequence_item;
 
         s = super.convert2string();
         
-        $sformat(s, "%s\n ********************jtag_transaction*****",s );
+        $sformat(s, "%s\n ********************jtag_transaction begin*****",s );
         $sformat(s, "%s\n o_ir = %0d'h",s, o_ir_length);
          
        
@@ -158,7 +172,7 @@ class jtag_transaction extends uvm_sequence_item;
             $sformat(s, "%s%0h",s,hex_value);
         end 
         
-        for ( int i = 0; i < four_bits_num; i++) begin
+        for ( int i = four_bits_num-1; i >= 0; i--) begin
             hex_value = o_ir[i*4+3] *8 + o_ir[i*4+2] *4 + o_ir[i*4+1] *2 + o_ir[i*4];
             $sformat(s, "%s%0h",s,hex_value);
         end
@@ -177,49 +191,49 @@ class jtag_transaction extends uvm_sequence_item;
             $sformat(s, "%s%0h",s,hex_value);
         end 
         
-        for ( int i = 0; i < four_bits_num; i++) begin
+        for ( int i = four_bits_num-1; i >= 0; i--) begin
             hex_value = o_dr[i*4+3] *8 + o_dr[i*4+2] *4 + o_dr[i*4+1] *2 + o_dr[i*4];
             $sformat(s, "%s%0h",s,hex_value);
         end
  
         $sformat(s, "%s\n chk_ir_tdo = \t%d\n chk_dr_tdo = \t%d\n",s,  chk_ir_tdo, chk_dr_tdo);
-        $sformat(s, "%s\n ********************jtag_transaction*****",s );
+        $sformat(s, "%s\n ********************jtag_transaction end*****",s );
         return s;
     endfunction: convert2string
 
     function string print_queue();
        string     s;
 
-       $sformat(s, "\n ///////////////tdi_ir_queue//////////////////////////\n" );
+       $sformat(s, "%s\n tdi_ir_queue = ",s );
        foreach( tdi_ir_queue[i] )
-            $sformat(s, "%s%0b",s,tdi_ir_queue[$-i] );
-       $sformat(s, "%s\n /////////////////////////////////////////////////////\n",s);
+            //$sformat(s, "%s%0b",s,tdi_ir_queue[$-i] );
+            $sformat(s, "%s%0b",s,tdi_ir_queue[i] );
 
-       $sformat(s, "%s\n ///////////////tdi_dr_queue//////////////////////////\n",s);
+       $sformat(s, "%s\n tdi_dr_queue = ",s );
        foreach( tdi_dr_queue[i] )
-            $sformat(s, "%s%0b",s,tdi_dr_queue[$-i] );
-       $sformat(s, "%s\n /////////////////////////////////////////////////////\n",s);
+            //$sformat(s, "%s%0b",s,tdi_dr_queue[$-i] );
+            $sformat(s, "%s%0b",s,tdi_dr_queue[i] );
 
-       $sformat(s, "%s\n ///////////////tdo_ir_queue//////////////////////////\n",s);
+       $sformat(s, "%s\n tdo_ir_queue = ",s );
        foreach( tdo_ir_queue[i] )
-            $sformat(s, "%s%0b",s,tdo_ir_queue[$-i] );
-       $sformat(s, "%s\n /////////////////////////////////////////////////////\n",s);
+            //$sformat(s, "%s%0b",s,tdo_ir_queue[$-i] );
+            $sformat(s, "%s%0b",s,tdo_ir_queue[i] );
 
-       $sformat(s, "%s\n ///////////////tdo_dr_queue//////////////////////////\n",s);
+       $sformat(s, "%s\n tdo_dr_queue = ",s );
        foreach( tdo_dr_queue[i] )
-            $sformat(s, "%s%0b",s,tdo_dr_queue[$-i] );
-       $sformat(s, "%s\n /////////////////////////////////////////////////////\n",s);
+            //$sformat(s, "%s%0b",s,tdo_dr_queue[$-i] );
+            $sformat(s, "%s%0b",s,tdo_dr_queue[i] );
        if(chk_ir_tdo) begin
-          $sformat(s, "%s\n ///////////////exp_tdo_ir_queue//////////////////////////\n",s);
+          $sformat(s, "%s\n exp_tdo_ir_queue = ",s);
           foreach( exp_tdo_ir_queue[i] )
-               $sformat(s, "%s%0b",s,exp_tdo_ir_queue[$-i] );
-          $sformat(s, "%s\n /////////////////////////////////////////////////////\n",s);
+               //$sformat(s, "%s%0b",s,exp_tdo_ir_queue[$-i] );
+               $sformat(s, "%s%0b",s,exp_tdo_ir_queue[i] );
        end
        if(chk_dr_tdo) begin
-          $sformat(s, "%s\n ///////////////exp_tdo_dr_queue//////////////////////////\n",s);
+          $sformat(s, "%s\n exp_tdo_dr_queue = ",s);
           foreach( exp_tdo_dr_queue[i] )
-               $sformat(s, "%s%0b",s,exp_tdo_dr_queue[$-i] );
-          $sformat(s, "%s\n /////////////////////////////////////////////////////\n",s);
+               //$sformat(s, "%s%0b",s,exp_tdo_dr_queue[$-i] );
+               $sformat(s, "%s%0b",s,exp_tdo_dr_queue[i] );
        end
        return s;
     endfunction: print_queue
@@ -307,7 +321,7 @@ class dft_register_transaction extends uvm_sequence_item;
     function string convert2string();
         string       s;
         $sformat(s, "%s\n ********************dft_register_transaction*****\n",s );
-        $sformat(s, "%s\n read_not_write = \t%d \n address = \t%h \n reg_length = \t%d\n",s, read_not_write, address, reg_length);
+        $sformat(s, "%s\n read_not_write = %0d \n address = %h \n reg_length = %0d\n",s, read_not_write, address, reg_length);
         
         $sformat(s, "%s\n ///////////////wr_data_q//////////////////////////\n",s );
         foreach( wr_data_q[i] )
@@ -368,6 +382,7 @@ class dft_register_monitor extends uvm_subscriber #(jtag_transaction);
       end
       
       node_initialize();
+      node_value_print();
    endfunction: build_phase
 
    function void write( jtag_transaction t);
@@ -387,26 +402,28 @@ class dft_register_monitor extends uvm_subscriber #(jtag_transaction);
       
       if(temp_ir == `I1687_OPCODE) begin
 
-         cght_data = new("cght_data"); 
+         //cght_data = new("cght_data"); 
          
          cght_data = dft_tdr_network(t); 
 
-         `uvm_info( report_id,{ cght_data.convert2string }, UVM_DEBUG );
-         dft_reg_tx = dft_register_transaction::type_id::create("dft_reg_tx");
-         
-         dft_reg_tx.read_not_write = t.read_not_write;
-         dft_reg_tx.address = cght_data.reg_addr;
-         
-         if(t.read_not_write) begin
-            dft_reg_tx.rd_data_q = cght_data.reg_data_q;
-            dft_reg_tx.reg_length = cght_data.reg_data_q.size();
-         end
-         else begin
-            dft_reg_tx.wr_data_q = cght_data.reg_data_q;
-            dft_reg_tx.reg_length = cght_data.reg_data_q.size();
-         end
-         dft_reg_ap.write(dft_reg_tx);
-      end
+         `uvm_info( report_id,{ cght_data.convert2string }, UVM_MEDIUM);
+         if(cght_data.caught_1500_reg) begin
+            dft_reg_tx = dft_register_transaction::type_id::create("dft_reg_tx");
+            
+            dft_reg_tx.read_not_write = t.read_not_write;
+            dft_reg_tx.address = cght_data.reg_addr;
+            
+            if(t.read_not_write) begin
+               dft_reg_tx.rd_data_q = cght_data.reg_data_q;
+               dft_reg_tx.reg_length = cght_data.reg_data_q.size();
+            end
+            else begin
+               dft_reg_tx.wr_data_q = cght_data.reg_data_q;
+               dft_reg_tx.reg_length = cght_data.reg_data_q.size();
+            end
+            dft_reg_ap.write(dft_reg_tx);
+         end// if(cght_data.caught_1500_reg) begin
+      end// if(temp_ir == `I1687_OPCODE) begin
       else begin
          dft_reg_tx = dft_register_transaction::type_id::create("dft_reg_tx");
          dft_reg_tx.read_not_write = t.read_not_write;
@@ -431,46 +448,110 @@ class dft_register_monitor extends uvm_subscriber #(jtag_transaction);
       end
    endfunction :node_initialize
    
+   virtual function void node_out_update();
+      foreach (sel_wir[i]) sel_wir[i].out_update();
+      foreach (sib[i]) sib[i].out_update();
+      foreach (cascd_wir[i]) cascd_wir[i].out_update();
+      foreach (wir[i]) wir[i].out_update();
+      if(wdr_dynmc.size() >= 1)
+         foreach (wdr_dynmc[i]) wdr_dynmc[i].out_update();
+      if(cascd_wdr_dynmc.size() >= 1)
+         foreach (cascd_wdr_dynmc[i]) cascd_wdr_dynmc[i].out_update();
+   endfunction :node_out_update
+   
+   virtual function void node_value_update();
+      foreach (sel_wir[i]) if(sib[i].value) sel_wir[i].value_update();
+      foreach (sib[i]) sib[i].value_update();
+      foreach (cascd_wir[i]) cascd_wir[i].value_update();
+      foreach (wir[i]) wir[i].value_update();
+      if(wdr_dynmc.size() >= 1)
+         foreach (wdr_dynmc[i]) wdr_dynmc[i].value_update();
+      if(cascd_wdr_dynmc.size() >= 1)
+         foreach (cascd_wdr_dynmc[i]) cascd_wdr_dynmc[i].value_update();
+   endfunction :node_value_update
+   
+   virtual function void node_value_print();
+      string s; 
+      
+      $sformat(s, "%s\n sib = %0d'",s, `SIB_WIDTH);
+      for(int i=`SIB_WIDTH-1; i>=0; i--) $sformat(s, "%s%0b",s,sib[i].value);
+      
+      $sformat(s, "%s\n sel_wir = %0d'",s, `SIB_WIDTH);
+      for(int i=`SIB_WIDTH-1; i>=0; i--) $sformat(s, "%s%0b",s,sel_wir[i].value);
+
+      $sformat(s, "%s\n wir = %0d'",s, `IEEE_1500_IR_WIDTH);
+      for(int i=`IEEE_1500_IR_WIDTH-1; i>=0; i--) $sformat(s, "%s%0b",s,wir[i].value);
+      
+      $sformat(s, "%s\n cascd_wir = %0d'",s, `IEEE_1500_IR_WIDTH);
+      for(int i=`IEEE_1500_IR_WIDTH-1; i>=0; i--) $sformat(s, "%s%0b",s,cascd_wir[i].value);
+      
+      $sformat(s, "%s\n wdr_dynmc = %0d'",s, wdr_dynmc.size());
+      for(int i=wdr_dynmc.size()-1; i>=0; i--) $sformat(s, "%s%0b",s,wdr_dynmc[i].value);
+
+      $sformat(s, "%s\n cascd_wdr_dynmc = %0d'",s, cascd_wdr_dynmc.size());
+      for(int i=cascd_wdr_dynmc.size()-1; i>=0; i--) $sformat(s, "%s%0b",s,cascd_wdr_dynmc[i].value);
+
+      `uvm_info("node_value_print",s,UVM_DEBUG);
+   endfunction :node_value_print
+   
+
+
    virtual function caught_data dft_tdr_network (jtag_transaction jtag_tx); 
-      int unsigned                  chain_length = `I1687_LENGTH;
+      int unsigned                  chain_length;
       int unsigned                  wdr_length;
       bit[`IEEE_1500_IR_WIDTH-1:0]  wir_data;
       bit                           tdi, tdo; 
       caught_data                   cght_data; 
+
+      cght_data = caught_data::type_id::create("cght_data");
+      
+      //`uvm_info("dft_tdr_network ",$sformatf("{sib[1],sib[0],sib[3],sib[2]} = %0b%0b%0b%0b",sib[1].value,sib[0].value,sib[3].value,sib[2].value),UVM_NONE);
+      case({sib[1].value, sib[0].value, sib[3].value, sib[2].value})
+         4'b0000: begin
+            chain_length = `I1687_LENGTH;
+            wdr_dynmc = new[1]; //It's not really being used, just to avoid Null object operation when connecting sel_wir[3].
+            wdr_dynmc[0] = new("wdr_dynmc");
+         end
+         4'b0001: begin
+            chain_length = ((sel_wir[2].value == 1) ? chain_length + `IEEE_1500_IR_WIDTH : `I1687_LENGTH) + 1;    
+            if((sel_wir[2].value == 0))begin
+               wdr_length = jtag_tx.o_dr_length - chain_length;
+               wdr_dynmc = new[wdr_length];
+               foreach(wdr_dynmc[i]) wdr_dynmc[i] = new("wdr_dynmc");
+            end
+         end
+         4'b0010: begin
+            chain_length = ((sel_wir[3].value == 1) ? chain_length + `IEEE_1500_IR_WIDTH : `I1687_LENGTH) + 1;    
+            if((sel_wir[3].value == 0))begin
+               wdr_length = jtag_tx.o_dr_length - chain_length;
+               wdr_dynmc = new[wdr_length];
+               foreach(wdr_dynmc[i]) wdr_dynmc[i] = new("wdr_dynmc");
+            end
+         end
+         4'b0101: begin
+            chain_length = ((sel_wir[0].value == 1) ? `SIB_WIDTH + `IEEE_1500_IR_WIDTH : `SIB_WIDTH) + 2;    
+            if((sel_wir[0].value == 0))begin
+               wdr_length = jtag_tx.o_dr_length - chain_length;
+               cascd_wdr_dynmc = new[wdr_length];
+               foreach(cascd_wdr_dynmc[i]) cascd_wdr_dynmc[i] = new("cascd_wdr_dynmc");
+            end
+         end
+         4'b1001: begin
+            chain_length = ((sel_wir[1].value == 1) ? `SIB_WIDTH + `IEEE_1500_IR_WIDTH : `SIB_WIDTH) + 2;    
+            if((sel_wir[1].value == 0))begin
+               wdr_length = jtag_tx.o_dr_length - chain_length;
+               cascd_wdr_dynmc = new[wdr_length];
+               foreach(cascd_wdr_dynmc[i]) cascd_wdr_dynmc[i] = new("cascd_wdr_dynmc");
+            end
+         end
+      endcase
+       
+      //`uvm_info("dft_tdr_network ",$sformatf("chain_length = %0d, wdr_length = %0d",chain_length, wdr_length),UVM_NONE);
+      
       for(int shift_cycle = 0; shift_cycle < jtag_tx.o_dr_length; shift_cycle++) begin
          tdi = jtag_tx.read_not_write ? jtag_tx.tdo_dr_queue[shift_cycle] : jtag_tx.tdi_dr_queue[shift_cycle];
          //calculate current chain_length
-         case({sib[1].value, sib[0].value, sib[3].value, sib[2].value})
-            4'b0001: begin
-               chain_length = ((sel_wir[2].value == 1) ? chain_length + `IEEE_1500_IR_WIDTH : chain_length ) + 1;    
-               if((sel_wir[2].value == 0))begin
-                  wdr_length = jtag_tx.o_dr_length - chain_length;
-                  wdr_dynmc = new[wdr_length];
-               end
-            end
-            4'b0010: begin
-               chain_length = ((sel_wir[3].value == 1) ? chain_length + `IEEE_1500_IR_WIDTH : chain_length ) + 1;    
-               if((sel_wir[3].value == 0))begin
-                  wdr_length = jtag_tx.o_dr_length - chain_length;
-                  wdr_dynmc = new[wdr_length];
-               end
-            end
-            4'b0101: begin
-               chain_length = ((sel_wir[0].value == 1) ? chain_length + `IEEE_1500_IR_WIDTH : chain_length ) + 2;    
-               if((sel_wir[0].value == 0))begin
-                  wdr_length = jtag_tx.o_dr_length - chain_length;
-                  cascd_wdr_dynmc = new[wdr_length];
-               end
-            end
-            4'b1001: begin
-               chain_length = ((sel_wir[1].value == 1) ? chain_length + `IEEE_1500_IR_WIDTH : chain_length ) + 2;    
-               if((sel_wir[1].value == 0))begin
-                  wdr_length = jtag_tx.o_dr_length - chain_length;
-                  cascd_wdr_dynmc = new[wdr_length];
-               end
-            end
-         endcase
-         
+        
          tdo = sib[2].out;
      
          //sib[2] connection
@@ -497,10 +578,15 @@ class dft_register_monitor extends uvm_subscriber #(jtag_transaction);
                   wdr_dynmc[i].in = wdr_dynmc[i+1].out;
    
                if(shift_cycle == jtag_tx.o_dr_length-1)begin
-                  cght_data = caught_data::type_id::create("cght_data");
+                  //cght_data = caught_data::type_id::create("cght_data");
                   cght_data.caught_1500_reg = 1;
                   cght_data.reg_addr[`SIB_WIDTH-1:0] = {sib[1].value,sib[0].value,sib[3].value,sib[2].value};
                   foreach(wir[i]) cght_data.reg_addr[`SIB_WIDTH+i] = wir[i].value;
+                           
+                  //last shift cycle,in order to store DR in caught_data, need to update out and value in advance.
+                  node_out_update(); 
+                  node_value_update(); 
+
                   foreach(wdr_dynmc[i]) cght_data.reg_data_q[i] = wdr_dynmc[i].value;
                end
             end
@@ -545,10 +631,15 @@ class dft_register_monitor extends uvm_subscriber #(jtag_transaction);
                         for(int i=0; i < cascd_wdr_dynmc.size - 1; i++) cascd_wdr_dynmc[i].in = cascd_wdr_dynmc[i+1].out;
                         
                         if(shift_cycle == jtag_tx.o_dr_length-1)begin
-                           cght_data = caught_data::type_id::create("cght_data");
+                           //cght_data = caught_data::type_id::create("cght_data");
                            cght_data.caught_1500_reg = 1;
                            cght_data.reg_addr[`SIB_WIDTH-1:0] = {sib[1].value,sib[0].value,sib[3].value,sib[2].value};
                            foreach(cascd_wir[i]) cght_data.reg_addr[`SIB_WIDTH+i] = cascd_wir[i].value;
+                           
+                           //last shift cycle,in order to store DR in caught_data, need to update out and value in advance.
+                           node_out_update(); 
+                           node_value_update(); 
+
                            foreach(cascd_wdr_dynmc[i]) cght_data.reg_data_q[i] = cascd_wdr_dynmc[i].value;
                         end// if(shift_cycle == jtag_tx.o_dr_length-1)begin
                      end//! if(sel_wir[0].value == 1) begin
@@ -574,10 +665,15 @@ class dft_register_monitor extends uvm_subscriber #(jtag_transaction);
                         for(int i=0; i < cascd_wdr_dynmc.size - 1; i++) cascd_wdr_dynmc[i].in = cascd_wdr_dynmc[i+1].out;
                         
                         if(shift_cycle == jtag_tx.o_dr_length-1)begin
-                           cght_data = caught_data::type_id::create("cght_data");
+                           //cght_data = caught_data::type_id::create("cght_data");
                            cght_data.caught_1500_reg = 1;
                            cght_data.reg_addr[`SIB_WIDTH-1:0] = {sib[1].value,sib[0].value,sib[3].value,sib[2].value};
                            foreach(cascd_wir[i]) cght_data.reg_addr[`SIB_WIDTH+i] = cascd_wir[i].value;
+                           
+                           //last shift cycle,in order to store DR in caught_data, need to update out and value in advance.
+                           node_out_update(); 
+                           node_value_update(); 
+                           
                            foreach(cascd_wdr_dynmc[i]) cght_data.reg_data_q[i] = cascd_wdr_dynmc[i].value;
                         end// if(shift_cycle == jtag_tx.o_dr_length-1)begin
                      end//! if(sel_wir[1].value == 1) begin
@@ -591,17 +687,25 @@ class dft_register_monitor extends uvm_subscriber #(jtag_transaction);
                   sel_wir[2].in = wdr_dynmc[0].out;
                   
                   if(shift_cycle == jtag_tx.o_dr_length-1)begin
-                     cght_data = caught_data::type_id::create("cght_data");
+                     //cght_data = caught_data::type_id::create("cght_data");
                      cght_data.caught_1500_reg = 1;
                      cght_data.reg_addr[`SIB_WIDTH-1:0] = {sib[1].value,sib[0].value,sib[3].value,sib[2].value};
                      foreach(wir[i]) cght_data.reg_addr[`SIB_WIDTH+i] = wir[i].value;
+                     
+                     //last shift cycle,in order to store DR in caught_data, need to update out and value in advance.
+                     node_out_update(); 
+                     node_value_update(); 
+
                      foreach(wdr_dynmc[i]) cght_data.reg_data_q[i] = wdr_dynmc[i].value;
                end// if(shift_cycle == jtag_tx.o_dr_length-1)begin
                end// !if(wir_data == `SUB_CLIENT_SIB_OPCODE) begin
             end //!if(sel_wir[2].value == 1) begin
          end //if(sib[2].value == 1 ) begin
+         node_out_update(); 
       end//for(int shift_cycle = 0; shift_cycle < jtag_tx.o_dr_length; shift_cycle++) begin
       
+      node_value_update(); 
+      node_value_print(); 
       wdr_dynmc.delete();
       cascd_wdr_dynmc.delete();
       
@@ -884,6 +988,7 @@ class jtag_driver extends uvm_driver#( jtag_transaction );
    
    uvm_analysis_port #(stil_info_transaction)   jtag_drv_ap; 
    virtual jtag_if         jtag_vi;
+   string                  report_id = "jtag_driver";
    bit                     gen_stil_file;
    string                  stil_file_name;
    int                     tck_half_period;
@@ -901,6 +1006,7 @@ class jtag_driver extends uvm_driver#( jtag_transaction );
       jtag_cfg = jtag_configuration::type_id::create( .name( "jtag_cfg" ) );
       assert(uvm_config_db#(jtag_configuration)::get ( .cntxt( this ), .inst_name( "*" ), .field_name( "jtag_cfg" ), .value( this.jtag_cfg) ));
 
+      `uvm_info(report_id,jtag_cfg.convert2string,UVM_DEBUG);
       gen_stil_file = jtag_cfg.gen_stil_file;
       stil_file_name = jtag_cfg.stil_file_name;
       tck_half_period = jtag_cfg.tck_half_period;
@@ -1868,6 +1974,7 @@ class dft_reg_tx_to_jtag_tx_sequence extends uvm_sequence#( jtag_transaction);
       bit[`LVL1SIB_WIDTH-1:0]                      lvl1_sib; 
       bit[`LVL2SIB_WIDTH-1:0]                      lvl2_sib; 
       bit[`IEEE_1500_IR_WIDTH-1:0]                 wir = `SUB_CLIENT_SIB_OPCODE; 
+      bit[`IEEE_1500_IR_WIDTH-1:0]                 sub_client_sib_opcode = `SUB_CLIENT_SIB_OPCODE; 
       bit[`IEEE_1149_IR_WIDTH-1:0]                 ir = `I1687_OPCODE; 
       bit                                          sel_wir,sel_wir_2nd; 
       bit                                          temp_dr_q[$]; 
@@ -1924,13 +2031,21 @@ class dft_reg_tx_to_jtag_tx_sequence extends uvm_sequence#( jtag_transaction);
             `LVL1SIB_WIDTH'b01:begin
                temp_dr_q = {lvl1_sib[0],sel_wir};
                //load SUB_CLIENT_SIB_OPCODE WIR
-               if(lvl2_sib!=0) temp_dr_q = {temp_dr_q,`SUB_CLIENT_SIB_OPCODE,lvl1_sib[1]};
+               if(lvl2_sib!=0) begin
+                  for(int i=0; i<`IEEE_1500_IR_WIDTH; i++) temp_dr_q.push_back(sub_client_sib_opcode[i]);
+                  temp_dr_q.push_back(lvl1_sib[1]);
+                  //foreach(temp_dr_q[i]) $display( "temp_dr_q[%0d] = %0b",i,temp_dr_q[$-i] );
+               end
                //load user WIR
-               else temp_dr_q = {temp_dr_q,dft_reg_tx[`IEEE_1500_IR_WIDTH+`SIB_WIDTH-1:`SIB_WIDTH],lvl1_sib[1]};
+               else begin
+                  for(int i=0; i<`IEEE_1500_IR_WIDTH; i++) temp_dr_q.push_back(dft_reg_tx.address[`SIB_WIDTH+i]);
+                  temp_dr_q.push_back(lvl1_sib[1]);
+               end
             end
             `LVL1SIB_WIDTH'b10:begin
                //load user WIR
-               temp_dr_q = {lvl1_sib,sel_wir,dft_reg_tx[`IEEE_1500_IR_WIDTH+`SIB_WIDTH-1:`SIB_WIDTH]};
+               temp_dr_q = {lvl1_sib,sel_wir};
+               for(int i=0; i<`IEEE_1500_IR_WIDTH; i++) temp_dr_q.push_back(dft_reg_tx.address[`SIB_WIDTH+i]);
             end
          endcase
          foreach(temp_dr_q[i])jtag_tx.o_dr[i] = temp_dr_q[i];
@@ -1946,7 +2061,7 @@ class dft_reg_tx_to_jtag_tx_sequence extends uvm_sequence#( jtag_transaction);
             jtag_tx.o_dr = new[jtag_tx.o_dr_length];
 
             sel_wir = 0;
-            temp_dr_q = {lvl1_sib[0],sel_wir,lvl2_sib,lvl1_sib[1]};
+            temp_dr_q = {lvl1_sib[0],sel_wir,lvl2_sib[0],lvl2_sib[1],lvl1_sib[1]};
          end
          else begin
             jtag_tx.o_dr_length = `I1687_LENGTH + dft_reg_tx.reg_length + 1;
@@ -1975,8 +2090,16 @@ class dft_reg_tx_to_jtag_tx_sequence extends uvm_sequence#( jtag_transaction);
             sel_wir = 0;
             sel_wir_2nd = 0;
             case(lvl2_sib)
-               `LVL2SIB_WIDTH'b01: temp_dr_q = {lvl1_sib[0],sel_wir,lvl2_sib[0],sel_wir_2nd,dft_reg_tx.address[`IEEE_1500_IR_WIDTH-1:`SIB_WIDTH],lvl2_sib[1],lvl1_sib[1]};
-               `LVL2SIB_WIDTH'b10: temp_dr_q = {lvl1_sib[0],sel_wir,lvl2_sib,sel_wir_2nd,dft_reg_tx.address[`IEEE_1500_IR_WIDTH-1:`SIB_WIDTH],lvl1_sib[1]};
+               `LVL2SIB_WIDTH'b01: begin
+                  temp_dr_q = {lvl1_sib[0],sel_wir,lvl2_sib[0],sel_wir_2nd};
+                  for(int i=0; i<`IEEE_1500_IR_WIDTH; i++) temp_dr_q.push_back(dft_reg_tx.address[`SIB_WIDTH+i]);
+                  temp_dr_q = {temp_dr_q,lvl2_sib[1],lvl1_sib[1]};
+               end
+               `LVL2SIB_WIDTH'b10: begin
+                  temp_dr_q = {lvl1_sib[0],sel_wir,lvl2_sib,sel_wir_2nd};
+                  for(int i=0; i<`IEEE_1500_IR_WIDTH; i++) temp_dr_q.push_back(dft_reg_tx.address[`SIB_WIDTH+i]);
+                  temp_dr_q = {temp_dr_q,lvl1_sib[1]};
+               end
             endcase
             foreach(temp_dr_q[i])jtag_tx.o_dr[i] = temp_dr_q[i];
             jtag_tx_q[3] = jtag_transaction::type_id::create("jtag_tx_q[3]");
@@ -2015,7 +2138,7 @@ class dft_reg_tx_to_jtag_tx_sequence extends uvm_sequence#( jtag_transaction);
       foreach(jtag_tx_q[i]) begin
          start_item( jtag_tx_q[i] );
          finish_item( jtag_tx_q[i]);
-         `uvm_info( "jtag_tx", { "\n",jtag_tx_q[i].convert2string() }, UVM_LOW );
+         `uvm_info( report_id, { "\n",jtag_tx_q[i].convert2string() }, UVM_LOW );
       end
       up_sequencer.item_done();
       jtag_tx_q.delete();

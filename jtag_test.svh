@@ -68,7 +68,7 @@ endclass: jtag_base_test
 
 class jtag_1149_1_test extends jtag_base_test;
    `uvm_component_utils( jtag_1149_1_test )
-   
+   string         report_id = "jtag_1149_1_test" ; 
    function new( string name, uvm_component parent );
       super.new( name, parent );
       //factory.set_type_override_by_name("jtag_driver","jtag_driver_atpg","*");
@@ -90,6 +90,7 @@ class jtag_1149_1_test extends jtag_base_test;
       uvm_config_db#( jtag_configuration )::set( .cntxt( this ), .inst_name( "*" ), .field_name( "jtag_cfg" ), .value( jtag_cfg ) );
       uvm_config_db#( clk_configuration )::set( .cntxt( this ), .inst_name( "*" ), .field_name( "clk_cfg" ), .value( clk_cfg ) );
       uvm_config_db#( reset_configuration )::set( .cntxt( this ), .inst_name( "*" ), .field_name( "reset_cfg" ), .value( reset_cfg ) );
+      `uvm_info(report_id,jtag_cfg.convert2string,UVM_DEBUG);
    endfunction: build_phase
 
    task main_phase( uvm_phase phase);

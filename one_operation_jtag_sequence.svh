@@ -45,8 +45,8 @@ class jtag_wr_sequence extends uvm_reg_sequence;
       //bus_reg_extension = bus_reg_ext::type_id::create(.name("bus_reg_extension"));
 
       $cast( jtag_reg_block, model );
-      //dr_length = `IDCODE_LENGTH;
-      //idcode = `IDCODE_LENGTH'h55;
+      dr_length = `IDCODE_LENGTH;
+      idcode = `IDCODE_LENGTH'h55;
       //bus_reg_extension.chk_ir_tdo = 1;
       //bus_reg_extension.chk_dr_tdo = 1;
       ////bus_reg_extension.exp_tdo_ir_q = new[`DFT_REG_ADDR_WIDTH]; 
@@ -65,8 +65,8 @@ class jtag_wr_sequence extends uvm_reg_sequence;
       //end
 
       //write_reg( jtag_reg_block.idcode_reg, status, { idcode, dr_length }, .extension(bus_reg_extension) );
-      //write_reg( jtag_reg_block.idcode_reg, status, { idcode });
-      write_reg( jtag_reg_block.bypass_reg, status, { `BYPASS_LENGTH'h1});
+      write_reg( jtag_reg_block.idcode_reg, status, { idcode });
+      //write_reg( jtag_reg_block.bypass_reg, status, { `BYPASS_LENGTH'h1});
   endtask: body
 endclass: jtag_wr_sequence
 

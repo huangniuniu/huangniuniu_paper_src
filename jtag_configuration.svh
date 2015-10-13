@@ -16,6 +16,14 @@ class jtag_configuration extends uvm_object;
    bit                      gen_stil_file;
    string                   stil_file_name;
    int                      tck_half_period;
+
+   function string convert2string();
+      string       s;
+      $sformat(s, "%s\n ********************jtag_configuration*****",s );
+      $sformat(s, "%s\n gen_stil_file = \t%b \n stil_file_name = \t%s \n tck_half_period = \t%0d",s, gen_stil_file, stil_file_name, tck_half_period);
+      $sformat(s, "%s\n ********************jtag_configuration*****",s );
+      return s;
+   endfunction: convert2string
 endclass: jtag_configuration
 
 //---------------------------------------------------------------------------
