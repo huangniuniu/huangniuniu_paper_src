@@ -28,8 +28,7 @@ interface jtag_if( input bit tck, input bit trst);
     modport master_mp( input trst, clocking negedge_cb, clocking posedge_cb );
     modport slave_mp ( input tdi, tms, output tdo);
     modport monitor_mp ( input trst, clocking monitor_cb);
-    
- endinterface: jtag_if
+endinterface: jtag_if
 
 //------------------------------------------------------------------------------
 // Interface: clk_if 
