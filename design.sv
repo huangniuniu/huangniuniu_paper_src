@@ -2,14 +2,19 @@
 `include "uvm_macros.svh"
 `include "jtag_pkg.sv"
 `include "jtag_if.sv"
-
 //------------------------------------------------------------------------------
 // Module: system_shell
 //   This is the DUT.
 //------------------------------------------------------------------------------
 
-module system_shell( jtag_if.slave_mp jtag_if, clk_if clk_if, reset_if.dut_mp reset_if, pad_if.dut_mp pad_if);
+`ifdef UVM_TB
+module system_shell( jtag_if.slave_mp jtag_if, clk_if.dut_mp tck_clk_if, clk_if.dut_mp sysclk_clk_if,reset_if.dut_mp reset_if, pad_if.dut_mp pad_if);
    import jtag_pkg::*; 
+`else
+module top ( TDI, TMS, TRST,RESET_L,TCK,SYSCLK,TDO);
+   input TDI,TMS,TRST,RESET_L,TCK,SYSCLK;
+   output TDO;
+`endif
        
    //-------------------------------------------------------------------------------
    //1149_1 FSM
@@ -26,7 +31,11 @@ module system_shell( jtag_if.slave_mp jtag_if, clk_if clk_if, reset_if.dut_mp re
    wire           tck; 
    wire           tdi; 
    wire           sysclk; 
+`ifdef UVM_TB
    wire           RESET_L = reset_if.RESET_L; 
+`else
+   wire           RESET_L;
+`endif
    wire           VDD; 
    wire           VSS; 
    reg            muxed_tdo; 
@@ -52,11 +61,18 @@ module system_shell( jtag_if.slave_mp jtag_if, clk_if clk_if, reset_if.dut_mp re
    //-------------------------------------------------------------------------------
    //1149_1 FSM
    //-------------------------------------------------------------------------------
+   
+`ifdef UVM_TB
    assign   reset = reset_if.trst;
-   assign   tck = clk_if.tck;
+   assign   tck = tck_clk_if.clk;
    assign   tdi = jtag_if.tdi;
    assign   jtag_if.tdo = muxed_tdo;
-
+`else
+   assign   reset = TRST;
+   assign   tck = TCK;
+   assign   tdi = TDI;
+   assign   TDO = muxed_tdo;
+`endif
    always@(posedge tck or posedge reset) begin
       if(reset) c_state <= `TEST_LOGIC_RESET;
       else c_state <= n_state;
@@ -167,7 +183,11 @@ module system_shell( jtag_if.slave_mp jtag_if, clk_if clk_if, reset_if.dut_mp re
 
 
 
+`ifdef UVM_TB
 endmodule: system_shell
+`else
+endmodule: top 
+`endif
 
 module JTAGTDR (RSTVAL, CAP_D, TDR_Q, CAP, SHF, UPD, TRST, TCK, TDI, TDO, SEL);
 

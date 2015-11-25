@@ -35,9 +35,12 @@ interface jtag_if( input bit tck, input bit trst);
 // Interface: clk_if 
 //------------------------------------------------------------------------------
 
-interface clk_if( output bit tck, sysclk);
-   
+interface clk_if( );
+   logic clk;
+   modport driver_mp(output clk); 
+   modport dut_mp(input clk); 
 endinterface: clk_if
+
 
 //------------------------------------------------------------------------------
 // Interface: reset_if 

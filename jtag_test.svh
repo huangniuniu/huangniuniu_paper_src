@@ -10,7 +10,8 @@ class jtag_base_test extends uvm_test;
    endfunction: new
 
    jtag_configuration       jtag_cfg;
-   clk_configuration        clk_cfg;
+   TCK_clk_configuration    TCK_clk_cfg;
+   SYSCLK_clk_configuration SYSCLK_clk_cfg;
    reset_configuration      reset_cfg;
    pad_configuration        pad_cfg;
    //jtag_env               jtag_env;
@@ -21,7 +22,8 @@ class jtag_base_test extends uvm_test;
       super.build_phase( phase );
 
       jtag_cfg = jtag_configuration::type_id::create( .name( "jtag_cfg" ) );
-      clk_cfg = clk_configuration::type_id::create( .name( "clk_cfg" ) );
+      TCK_clk_cfg = TCK_clk_configuration::type_id::create( .name( "TCK_clk_cfg" ) );
+      SYSCLK_clk_cfg = SYSCLK_clk_configuration::type_id::create( .name( "SYSCLK_clk_cfg" ) );
       reset_cfg = reset_configuration::type_id::create( .name( "reset_cfg" ) );
       pad_cfg = pad_configuration::type_id::create( .name( "pad_cfg" ) );
 
@@ -34,7 +36,8 @@ class jtag_base_test extends uvm_test;
       assert(uvm_config_db#( virtual jtag_if )::get ( .cntxt( this ), .inst_name( "*" ), .field_name( "jtag_if" ), .value( jtag_cfg.jtag_vi) ))
       else `uvm_fatal("NOVIF", "Failed to get virtual interfaces form uvm_config_db.\n");
 
-      assert(uvm_config_db#( virtual clk_if )::get ( .cntxt( this ), .inst_name( "*" ), .field_name( "clk_if" ), .value( clk_cfg.clk_vi) ))
+      assert(uvm_config_db#( virtual clk_if )::get ( .cntxt( this ), .inst_name( "*" ), .field_name( "TCK_clk_if" ), .value( TCK_clk_cfg.clk_vi) ))
+      assert(uvm_config_db#( virtual clk_if )::get ( .cntxt( this ), .inst_name( "*" ), .field_name( "SYSCLK_clk_if" ), .value( SYSCLK_clk_cfg.clk_vi) ))
       else `uvm_fatal("NOVIF", "Failed to get virtual interfaces form uvm_config_db.\n");
       
       assert(uvm_config_db#( virtual reset_if )::get ( .cntxt( this ), .inst_name( "*" ), .field_name( "reset_if" ), .value( reset_cfg.reset_vi) ))
@@ -44,12 +47,14 @@ class jtag_base_test extends uvm_test;
       else `uvm_fatal("NOVIF", "Failed to get virtual interfaces form uvm_config_db.\n");
       
       jtag_cfg.gen_stil_file = `OFF;
-      clk_cfg.gen_stil_file = `OFF;
+      TCK_clk_cfg.gen_stil_file = `OFF;
+      SYSCLK_clk_cfg.gen_stil_file = `OFF;
       reset_cfg.gen_stil_file = `OFF;
       pad_cfg.gen_stil_file = `OFF;
 
       uvm_config_db#( jtag_configuration )::set( .cntxt( this ), .inst_name( "*" ), .field_name( "jtag_cfg" ), .value( jtag_cfg ) );
-      uvm_config_db#( clk_configuration )::set( .cntxt( this ), .inst_name( "*" ), .field_name( "clk_cfg" ), .value( clk_cfg ) );
+      uvm_config_db#( TCK_clk_configuration )::set( .cntxt( this ), .inst_name( "*" ), .field_name( "clk_cfg" ), .value( TCK_clk_cfg ) );
+      uvm_config_db#( SYSCLK_clk_configuration )::set( .cntxt( this ), .inst_name( "*" ), .field_name( "clk_cfg" ), .value( SYSCLK_clk_cfg ) );
       uvm_config_db#( reset_configuration )::set( .cntxt( this ), .inst_name( "*" ), .field_name( "reset_cfg" ), .value( reset_cfg ) );
       uvm_config_db#( pad_configuration )::set( .cntxt( this ), .inst_name( "*" ), .field_name( "pad_cfg" ), .value( pad_cfg ) );
       
@@ -82,14 +87,26 @@ class jtag_1149_1_test extends jtag_base_test;
       jtag_cfg.stil_file_name = "jtag_1149_1_test.stil";
       jtag_cfg.tck_half_period = `TCK_HALF_PERIOD;
       
-      clk_cfg.gen_stil_file = `ON;
-      clk_cfg.tck_half_period = `TCK_HALF_PERIOD;
-      clk_cfg.sysclk_half_period = `TCK_HALF_PERIOD/2;
+      TCK_clk_cfg.gen_stil_file = `ON;
+      TCK_clk_cfg.half_period = `TCK_HALF_PERIOD;
+      TCK_clk_cfg.free_running = 0;
+      
+      SYSCLK_clk_cfg.gen_stil_file = `OFF;
+      SYSCLK_clk_cfg.half_period = `SYSCLK_HALF_PERIOD;
+      SYSCLK_clk_cfg.free_running = 1;
       
       reset_cfg.gen_stil_file = `ON;
+
+      jtag_cfg.pad_info_init();
+      TCK_clk_cfg.pad_info_init();
+      SYSCLK_clk_cfg.pad_info_init();
+      reset_cfg.pad_info_init();
+
       uvm_config_db#( jtag_configuration )::set( .cntxt( this ), .inst_name( "*" ), .field_name( "jtag_cfg" ), .value( jtag_cfg ) );
-      uvm_config_db#( clk_configuration )::set( .cntxt( this ), .inst_name( "*" ), .field_name( "clk_cfg" ), .value( clk_cfg ) );
+      uvm_config_db#( TCK_clk_configuration )::set( .cntxt( this ), .inst_name( "*" ), .field_name( "clk_cfg" ), .value( TCK_clk_cfg ) );
+      uvm_config_db#( SYSCLK_clk_configuration )::set( .cntxt( this ), .inst_name( "*" ), .field_name( "clk_cfg" ), .value( SYSCLK_clk_cfg ) );
       uvm_config_db#( reset_configuration )::set( .cntxt( this ), .inst_name( "*" ), .field_name( "reset_cfg" ), .value( reset_cfg ) );
+      
       `uvm_info(report_id,jtag_cfg.convert2string,UVM_DEBUG);
    endfunction: build_phase
 

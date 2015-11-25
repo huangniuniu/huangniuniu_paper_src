@@ -9,7 +9,9 @@ typedef enum bit[1:0] { IEEE_1149_1, IEEE_1500, IEEE_1687} protocol_e;
 typedef enum bit[3:0] { TEST_LOGIC_RESET, RUN_TEST_IDLE, SELECT_DR_SCAN, CAPTURE_DR,
                         SHIFT_DR, EXIT1_DR, PAUSE_DR, EXIT2_DR,UPDATE_DR,SELECT_IR_SCAN,
                         CAPTURE_IR,SHIFT_IR,EXIT1_IR,PAUSE_IR,EXIT2_IR,UPDATE_IR} ieee_1149_1_fsm_e;
+`define   CLK_STOP_LOW        255    
 `define   TCK_HALF_PERIOD     20     
+`define   SYSCLK_HALF_PERIOD  12     
 `define   ON                  1
 `define   OFF                 0 
 //`define   IR_WIDTH            8

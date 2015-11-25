@@ -1,6 +1,7 @@
 
 `uvm_analysis_imp_decl(_jtag_drv)
-`uvm_analysis_imp_decl(_clk_drv)
+`uvm_analysis_imp_decl(_TCK_clk_drv)
+`uvm_analysis_imp_decl(_SYSCLK_clk_drv)
 `uvm_analysis_imp_decl(_pad_drv)
 //---------------------------------------------------------------------------
 // Class: sib_node 
@@ -94,6 +95,42 @@ class bus_reg_ext extends uvm_object;
    endfunction : new
     
 endclass : bus_reg_ext
+
+//---------------------------------------------------------------------------
+// Class: clk_wave_description 
+//---------------------------------------------------------------------------
+class clk_wave_description extends uvm_object;
+   `uvm_object_utils(clk_wave_description)
+   string         wave_desc[]; 
+   int unsigned   array_size;
+
+   function new(string name = "clk_wave_description");
+     super.new(name);
+   endfunction : new
+   
+   virtual function void do_copy( uvm_object rhs );
+      clk_wave_description    that;
+
+      if ( ! $cast( that, rhs ) ) begin
+         `uvm_error( get_name(), "rhs is not a clk_wave_description" )
+         return;
+      end
+
+      super.do_copy( rhs );
+      this.array_size = that.array_size;
+      this.wave_desc = new[this.array_size];
+      foreach(that.wave_desc[i]) this.wave_desc[i] = that.wave_desc[i];
+   endfunction: do_copy
+
+   function string convert2string();
+      string s;
+      $sformat(s,"%s\n array_size = %0d",s, array_size);
+      foreach(wave_desc[i]) $sformat(s,"%s\n wave_desc[%0d] = %s",s, i, wave_desc[i]);
+
+      return s;
+   endfunction: convert2string
+endclass : clk_wave_description
+
 
 //------------------------------------------------------------------------------
 // class: jtag_transaction
@@ -275,13 +312,16 @@ class stil_info_transaction extends uvm_sequence_item;
     string     comment_info;
     int unsigned     time_stamp;
     `uvm_object_utils( stil_info_transaction )
-    
+    string     report_id;
+
     function new(string name = "stil_info_transaction");
         super.new(name);
+        report_id = name;
     endfunction
 
     function string convert2string();
         string       s;
+        $sformat(s, "%s*********%s*********\n",s,report_id);
         $sformat(s, "%s\n comment_info = %s\n stil_info = %s \n time_stamp = %d ",s, comment_info, stil_info, time_stamp);
         return s;
     endfunction
@@ -917,7 +957,7 @@ class reset_driver extends uvm_driver#( jtag_transaction );
          stil_info_tx.stil_info = $sformatf({"TRST = %0b; RESET_L = %0b;"},reset_vi.trst,reset_vi.RESET_L);
          stil_info_tx.comment_info = comment_str;
          stil_info_tx.time_stamp = $time;
-         `uvm_info("reset_drv",stil_info_tx.convert2string,UVM_NONE);
+         //`uvm_info("reset_drv",stil_info_tx.convert2string,UVM_NONE);
          reset_drv_ap.write(stil_info_tx);
       end
    endfunction :call_stil_gen
@@ -940,18 +980,196 @@ class reset_driver extends uvm_driver#( jtag_transaction );
 endclass: reset_driver
 
 //---------------------------------------------------------------------------
-// Class: clk_driver
+// Class: clk_driver_base
 //---------------------------------------------------------------------------
-class clk_driver extends uvm_driver#( jtag_transaction );
-   `uvm_component_utils( clk_driver )
+//class clk_driver_base #(type configuration = clk_configuration_base, string clk_name) extends uvm_driver#( jtag_transaction );
+class clk_driver_base #(type configuration = clk_configuration_base) extends uvm_driver;
+    
+   typedef clk_driver_base #(configuration) this_type;
+
+   typedef configuration     cfg_type;
+
+   virtual clk_if            clk_vi;
+
+   bit                       gen_stil_file;
+   bit                       free_running;
+   bit                       stop_clk;
+   bit                       clk_is_high;
+   int                       half_period;
+   cfg_type                  clk_cfg; 
+  
+   int unsigned              total_time,lcm,tck_cycle_cnt,delta;
+   clk_wave_description      clk_wave_desc;
+
+   `uvm_component_utils( this_type )
+   
+   uvm_analysis_port #(stil_info_transaction) clk_drv_ap;
+   stil_info_transaction     stil_info_tx;
+   
+   function new( string name, uvm_component parent );
+      super.new( name, parent );
+   endfunction: new
+   
+   function void build_phase( uvm_phase phase );
+      super.build_phase( phase );
+      
+      clk_drv_ap = new({"clk_drv_ap"}, this);
+      clk_wave_desc = new("clk_wave_desc");
+      clk_cfg = cfg_type::type_id::create(.name("clk_cfg"));
+      assert(uvm_config_db#(cfg_type)::get ( .cntxt( this ), .inst_name( "*" ), .field_name( "clk_cfg"), .value( this.clk_cfg) ));
+      
+      gen_stil_file = clk_cfg.gen_stil_file;
+      half_period = clk_cfg.half_period;
+      free_running = clk_cfg.free_running;
+      clk_vi = clk_cfg.clk_vi;
+   endfunction: build_phase
+   
+   virtual function void call_stil_gen (bit gen_stil_file, int wave_char, string comment_str = {""});
+      if(gen_stil_file == `ON) begin
+         stil_info_tx = stil_info_transaction::type_id::create("stil_info_tx");
+         stil_info_tx.stil_info = $sformatf({"%s = %0d;"},clk_cfg.pad_name, wave_char);
+         stil_info_tx.comment_info = comment_str;
+         stil_info_tx.time_stamp = $time;
+         //`uvm_info("clk_drv",stil_info_tx.convert2string,UVM_NONE);
+         clk_drv_ap.write(stil_info_tx);
+      end
+
+   endfunction :call_stil_gen
+
+   function int unsigned lcm_cal(int unsigned a, int unsigned b);
+      int unsigned c,temp;
+      temp = a*b;
+      while(a!=0) begin
+         c = a;
+         a = b%a;
+         b = c;
+      end
+      return temp/b;
+   endfunction: lcm_cal
+   
+   task run_phase( uvm_phase phase );
+      assert(uvm_config_db#(cfg_type)::get ( .cntxt( this ), .inst_name( "*" ), .field_name( "clk_cfg"), .value( this.clk_cfg) ));
+      clk_vi = clk_cfg.clk_vi;
+
+      lcm = lcm_cal(half_period,`TCK_HALF_PERIOD);
+      
+      //`uvm_info("clk_driver_base",$sformatf("lcm = %0d",lcm),UVM_NONE);
+      
+      clk_wave_desc.array_size = (lcm / `TCK_HALF_PERIOD)+1;
+      clk_wave_desc.wave_desc = new[clk_wave_desc.array_size];
+      clk_wave_desc.wave_desc[0] = "'0ns' D;";
+      
+      //`uvm_info("clk_driver_base",clk_wave_desc.convert2string,UVM_NONE);
+      //generate clk wave description
+      clk_wave_desc_init();
+
+      //store clk_wave_desc 
+      clk_cfg.clk_wave_desc = clk_wave_desc;
+      //$cast(clk_cfg.clk_wave_desc, clk_wave_desc.clone());
+      
+      uvm_config_db#(cfg_type)::set ( .cntxt( this ), .inst_name( "*" ), .field_name( "clk_cfg"), .value( this.clk_cfg) );
+      clk_vi.clk = 0;
+      
+      forever begin
+         if(free_running) begin
+            generate_clk;
+         end
+         else begin
+            assert(uvm_config_db#(cfg_type)::get ( .cntxt( this ), .inst_name( "*" ), .field_name( "clk_cfg"), .value( this.clk_cfg) ));
+            stop_clk = clk_cfg.stop_clk;
+            if(stop_clk) begin
+               #half_period; 
+               #half_period; 
+            end
+            else begin
+               generate_clk;
+            end
+         end
+      end
+   endtask: run_phase 
+   
+   function void clk_wave_desc_init();
+      total_time = 0;
+      tck_cycle_cnt = 0;
+      clk_is_high = 0;
+
+      $sformat(clk_wave_desc.wave_desc[tck_cycle_cnt+1],"%s '%0dns' %s;", clk_wave_desc.wave_desc[tck_cycle_cnt+1], (total_time % (`TCK_HALF_PERIOD * 2)), (clk_is_high == 0) ? "D" : "U");
+      while(total_time < lcm*2) begin
+         
+
+         if(total_time + half_period >= (`TCK_HALF_PERIOD * 2 * (tck_cycle_cnt + 1))) begin
+            delta = `TCK_HALF_PERIOD*2*(tck_cycle_cnt+1) - total_time;
+            
+            tck_cycle_cnt = tck_cycle_cnt + 1;
+            total_time = total_time + delta;
+            
+            //`uvm_info("clk_driver_base",$sformatf("total_time = %0d, tck_cycle_cnt = %0d", total_time, tck_cycle_cnt),UVM_NONE);
+            
+            $sformat(clk_wave_desc.wave_desc[tck_cycle_cnt+1],"%s '%0dns' %s;", clk_wave_desc.wave_desc[tck_cycle_cnt+1], (total_time % (`TCK_HALF_PERIOD * 2)), (clk_is_high == 0) ? "D" : "U");
+            if(delta != 0) begin
+               clk_is_high = ~clk_is_high;
+               total_time = total_time + half_period - delta;
+            
+               //`uvm_info("clk_driver_base",$sformatf("total_time = %0d, tck_cycle_cnt = %0d", total_time, tck_cycle_cnt),UVM_NONE);
+               $sformat(clk_wave_desc.wave_desc[tck_cycle_cnt+1],"%s '%0dns' %s;", clk_wave_desc.wave_desc[tck_cycle_cnt+1], (total_time % (`TCK_HALF_PERIOD * 2)), (clk_is_high == 0) ? "D" : "U");
+            end
+            //`uvm_info("clk_driver_base",clk_wave_desc.convert2string,UVM_NONE);
+         end// if(total_time + half_period <= (`TCK_HALF_PERIOD * 2 * tck_cycle_cnt)) begin
+         else begin
+            clk_is_high = ~clk_is_high;
+            total_time = total_time + half_period;
+            
+            //`uvm_info("clk_driver_base",$sformatf("total_time = %0d, tck_cycle_cnt = %0d", total_time, tck_cycle_cnt),UVM_NONE);
+            $sformat(clk_wave_desc.wave_desc[tck_cycle_cnt+1],"%s '%0dns' %s;", clk_wave_desc.wave_desc[tck_cycle_cnt+1], (total_time % (`TCK_HALF_PERIOD * 2)), (clk_is_high == 0) ? "D" : "U");
+
+            //`uvm_info("clk_driver_base",clk_wave_desc.convert2string,UVM_NONE);
+         end// !if(total_time + half_period <= (`TCK_HALF_PERIOD * 2 * tck_cycle_cnt)) begin
+      end// while(total_time < lcm*2) begin
+
+   endfunction: clk_wave_desc_init
+
+   task generate_clk;
+      total_time = 0;
+      tck_cycle_cnt = 0;
+
+      //call_stil_gen(gen_stil_file,tck_cycle_cnt);
+
+      while(total_time < lcm*2) begin
+         
+         if(total_time + half_period >= (`TCK_HALF_PERIOD * 2 * (tck_cycle_cnt + 1))) begin
+            delta = `TCK_HALF_PERIOD*2*(tck_cycle_cnt + 1) - total_time;
+            
+            tck_cycle_cnt = tck_cycle_cnt + 1;
+            call_stil_gen(gen_stil_file,tck_cycle_cnt);
+
+            if(delta != 0) begin
+               #half_period;
+               clk_vi.clk = ~clk_vi.clk;
+               total_time = total_time + half_period;
+            end
+         end// if(total_time + half_period <= (`TCK_HALF_PERIOD * 2 * tck_cycle_cnt)) begin
+         else begin
+            #half_period clk_vi.clk = ~clk_vi.clk;
+            total_time = total_time + half_period;
+         end// !if(total_time + half_period <= (`TCK_HALF_PERIOD * 2 * tck_cycle_cnt)) begin
+      end// while(total_time < lcm*2) begin
+   endtask: generate_clk
+endclass: clk_driver_base
+
+//---------------------------------------------------------------------------
+// Class: TCK_clk_driver
+//---------------------------------------------------------------------------
+class TCK_clk_driver extends uvm_driver;
+   `uvm_component_utils( TCK_clk_driver )
    
    virtual clk_if          clk_vi;
 
    bit                       gen_stil_file;
-   bit                       stop_tck,stop_sysclk;
+   bit                       stop_tck;
    int                       tck_half_period;
-   int                       sysclk_half_period;
-   clk_configuration         clk_cfg; 
+   TCK_clk_configuration     clk_cfg; 
+
+   clk_wave_description      clk_wave_desc;
    uvm_analysis_port #(stil_info_transaction) clk_drv_ap;
    stil_info_transaction     stil_info_tx;
    function new( string name, uvm_component parent );
@@ -962,54 +1180,74 @@ class clk_driver extends uvm_driver#( jtag_transaction );
       super.build_phase( phase );
       
       clk_drv_ap = new("clk_drv_ap ", this);
-      clk_cfg = clk_configuration::type_id::create(.name("clk_cfg"));
-      assert(uvm_config_db#(clk_configuration)::get ( .cntxt( this ), .inst_name( "*" ), .field_name( "clk_cfg" ), .value( this.clk_cfg) ));
+      clk_cfg = TCK_clk_configuration::type_id::create(.name("clk_cfg"));
+      clk_wave_desc = new("clk_wave_desc");
+      assert(uvm_config_db#(TCK_clk_configuration)::get ( .cntxt( this ), .inst_name( "*" ), .field_name( "clk_cfg" ), .value( this.clk_cfg) ));
       
       gen_stil_file = clk_cfg.gen_stil_file;
-      tck_half_period = clk_cfg.tck_half_period;
-      sysclk_half_period = clk_cfg.sysclk_half_period;
+      tck_half_period = clk_cfg.half_period;
       clk_vi = clk_cfg.clk_vi;
    endfunction: build_phase
    
    function void call_stil_gen (bit gen_stil_file, string comment_str = {""});
       if(gen_stil_file == `ON) begin
          stil_info_tx = stil_info_transaction::type_id::create("stil_info_tx");
-         stil_info_tx.stil_info = $sformatf({"TCK = %0b; SYSCLK = %0b;"},clk_vi.tck,clk_vi.sysclk);
+         stil_info_tx.stil_info = $sformatf({"TCK = %0b; "},clk_vi.clk);
          stil_info_tx.comment_info = comment_str;
          stil_info_tx.time_stamp = $time;
-         `uvm_info("clk_drv",stil_info_tx.convert2string,UVM_NONE);
+         //`uvm_info("clk_drv",stil_info_tx.convert2string,UVM_NONE);
          clk_drv_ap.write(stil_info_tx);
       end
    endfunction :call_stil_gen
 
 
    task run_phase( uvm_phase phase );
+      clk_wave_desc.wave_desc = new[2];
+      clk_wave_desc.wave_desc[0] = "{'0ns' D;}"; 
+      clk_wave_desc.wave_desc[1] = "{'0ns' U;}"; 
+      clk_cfg.clk_wave_desc = clk_wave_desc;
+      uvm_config_db#(TCK_clk_configuration)::set ( .cntxt( this ), .inst_name( "*" ), .field_name( "clk_cfg"), .value( this.clk_cfg) );
       
-      clk_vi.tck = 0;
-      clk_vi.sysclk = 0; 
+      clk_vi.clk = 0;
       call_stil_gen(gen_stil_file);
       //#tck_half_period;
       forever begin
-        #sysclk_half_period;
-        clk_vi.sysclk = ~clk_vi.sysclk; 
+        #tck_half_period;
+        clk_vi.clk = ~clk_vi.clk; 
         call_stil_gen(gen_stil_file);
-        
-        #sysclk_half_period;
-        clk_vi.sysclk = ~clk_vi.sysclk; 
-        clk_vi.tck = ~clk_vi.tck;
-        call_stil_gen(gen_stil_file);
-        
-        #sysclk_half_period;
-        clk_vi.sysclk = ~clk_vi.sysclk; 
-        call_stil_gen(gen_stil_file);
-        #sysclk_half_period;
-        clk_vi.sysclk = ~clk_vi.sysclk; 
-        clk_vi.tck = ~clk_vi.tck;
-        call_stil_gen(gen_stil_file);
-      
       end
    endtask: run_phase
-endclass: clk_driver
+endclass: TCK_clk_driver
+
+//---------------------------------------------------------------------------
+// Class: SYSCLK_clk_driver
+//---------------------------------------------------------------------------
+
+//typedef clk_driver_base#(SYSCLK_clk_configuration) SYSCLK_clk_driver; 
+class SYSCLK_clk_driver extends clk_driver_base #(SYSCLK_clk_configuration);
+   `uvm_component_utils( SYSCLK_clk_driver)
+   function new( string name, uvm_component parent );
+      super.new( name, parent );
+   endfunction: new
+  
+   virtual function void call_stil_gen (bit gen_stil_file, int wave_char, string comment_str = {""});
+      if(gen_stil_file == `ON) begin
+         stil_info_tx = stil_info_transaction::type_id::create("stil_info_tx");
+         if(wave_char == `CLK_STOP_LOW)
+            stil_info_tx.stil_info = $sformatf({"%s = 0;"},clk_cfg.pad_name);
+         else
+            stil_info_tx.stil_info = $sformatf({"%s = %0d;"},clk_cfg.pad_name,wave_char);
+         stil_info_tx.comment_info = comment_str;
+         stil_info_tx.time_stamp = $time;
+         //`uvm_info("clk_drv",stil_info_tx.convert2string,UVM_NONE);
+         clk_drv_ap.write(stil_info_tx);
+      end
+
+   endfunction :call_stil_gen
+
+
+endclass: SYSCLK_clk_driver 
+
 //---------------------------------------------------------------------------
 // Class: jtag_driver
 //---------------------------------------------------------------------------
@@ -1045,12 +1283,14 @@ class jtag_driver extends uvm_driver#( jtag_transaction );
    endfunction: build_phase
   
    function void call_stil_gen (bit gen_stil_file, string comment_str = {""}, string tdo = "X");
+   //function void call_stil_gen (bit gen_stil_file, string comment_str = {""}, bit tms = 1'bx, bit tdi = 1'bx, string tdo = "X");
       if(gen_stil_file == `ON) begin
          stil_info_tx = stil_info_transaction::type_id::create("stil_info_tx");
+         //stil_info_tx.stil_info = $sformatf({"TMS = %0b; TDI = %0b; TDO = %s;"},tms,tdi,tdo);;
          stil_info_tx.stil_info = $sformatf({"TMS = %0b; TDI = %0b; TDO = %s;"},jtag_vi.tms,jtag_vi.tdi,tdo);;
          stil_info_tx.comment_info = comment_str;
          stil_info_tx.time_stamp = $time;
-         `uvm_info("jtag_drv",stil_info_tx.convert2string,UVM_NONE);
+         //`uvm_info("jtag_drv",stil_info_tx.convert2string,UVM_NONE);
          
          jtag_drv_ap.write(stil_info_tx);
       end
@@ -1599,7 +1839,7 @@ class dft_register_adapter extends uvm_reg_adapter;
       ext_wr_data_length = 0;
 
       if(!$cast(extension,item.extension))
-         `uvm_error("reg2bus", "Extension casting failed.");
+         `uvm_error("reg2bus", "Extension casting failed.")
 
       if( extension != null ) begin
          dft_reg_tx.extension = extension;
@@ -1671,7 +1911,7 @@ class ieee_1149_1_reg_adapter extends uvm_reg_adapter;
 
       
       if(!$cast(extension,item.extension))
-         `uvm_error("reg2bus", "Extension casting failed.");
+         `uvm_error("reg2bus", "Extension casting failed.")
 
       if( extension != null ) begin
          jtag_tx.chk_ir_tdo = extension.chk_ir_tdo;
@@ -1773,21 +2013,44 @@ endclass:jtag_agent
 class stil_generator extends uvm_subscriber #( stil_info_transaction );
    `uvm_component_utils( stil_generator )
 
-   uvm_analysis_imp_jtag_drv  #(stil_info_transaction, stil_generator) jtag_drv_imp_export;
-   uvm_analysis_imp_clk_drv   #(stil_info_transaction, stil_generator) clk_drv_imp_export;
-   uvm_analysis_imp_pad_drv   #(stil_info_transaction, stil_generator) pad_drv_imp_export;
+   uvm_analysis_imp_jtag_drv        #(stil_info_transaction, stil_generator) jtag_drv_imp_export;
+   uvm_analysis_imp_TCK_clk_drv     #(stil_info_transaction, stil_generator) TCK_clk_drv_imp_export;
+   uvm_analysis_imp_SYSCLK_clk_drv  #(stil_info_transaction, stil_generator) SYSCLK_clk_drv_imp_export;
+   uvm_analysis_imp_pad_drv         #(stil_info_transaction, stil_generator) pad_drv_imp_export;
    
-   bit         write_to_file; 
-   string      jtag_drv_info;
-   string      clk_drv_info;
-   string      reset_drv_info;
-   string      pad_drv_info;
+   bit                        write_to_file; 
+   string                     jtag_drv_info;
+   string                     clk_drv_info;
+   string                     reset_drv_info;
+   string                     pad_drv_info;
    
-   stil_info_transaction      pad_stil_info_tx,pad_stil_info_tx_pre;
-   stil_info_transaction      reset_stil_info_tx,reset_stil_info_tx_pre;
-   stil_info_transaction      clk_stil_info_tx,clk_stil_info_tx_pre;
-   stil_info_transaction      jtag_stil_info_tx,jtag_stil_info_tx_pre;
-
+   jtag_configuration         jtag_cfg;
+   TCK_clk_configuration      TCK_clk_cfg;
+   SYSCLK_clk_configuration   SYSCLK_clk_cfg;
+   reset_configuration        reset_cfg;
+   
+   string                     stil_file_name;
+   int                        stil_fd;
+   bit                        gen_stil_file; 
+   int                        timing_window;
+   clk_wave_description       TCK_clk_wave_des;
+   clk_wave_description       SYSCLK_clk_wave_des;
+   
+   stil_info_transaction      pad_stil_info_tx_ping,pad_stil_info_tx_pong;
+   stil_info_transaction      reset_stil_info_tx_ping,reset_stil_info_tx_pong;
+   stil_info_transaction      TCK_stil_info_tx_ping,TCK_stil_info_tx_pong;
+   stil_info_transaction      SYSCLK_stil_info_tx_ping,SYSCLK_stil_info_tx_pong;
+   stil_info_transaction      jtag_stil_info_tx_ping,jtag_stil_info_tx_pong;
+  
+   bit                        pad_ping_data_rdy, pad_pong_data_rdy;
+   bit                        jtag_ping_data_rdy, jtag_pong_data_rdy;
+   bit                        SYSCLK_ping_data_rdy, SYSCLK_pong_data_rdy;
+   bit                        TCK_ping_data_rdy, TCK_pong_data_rdy;
+   bit                        reset_ping_data_rdy, reset_pong_data_rdy;
+  
+   string                     stil_str;
+   string                     comment_str;
+   semaphore                  pad_sem, jtag_sem, SYSCLK_sem, TCK_sem, reset_sem;
    function new( string name, uvm_component parent );
       super.new( name, parent );
    endfunction: new
@@ -1796,112 +2059,276 @@ class stil_generator extends uvm_subscriber #( stil_info_transaction );
       super.build_phase( phase );
       
       jtag_drv_imp_export = new("jtag_drv_imp_export", this);
-      clk_drv_imp_export = new("clk_drv_imp_export", this);
+      TCK_clk_drv_imp_export = new("TCK_clk_drv_imp_export", this);
+      SYSCLK_clk_drv_imp_export = new("SYSCLK_clk_drv_imp_export", this);
       pad_drv_imp_export = new("pad_drv_imp_export", this);
+     
+      TCK_clk_wave_des = clk_wave_description::type_id::create( .name("TCK_clk_wave_des"));
+      SYSCLK_clk_wave_des = clk_wave_description::type_id::create( .name("SYSCLK_clk_wave_des"));
+      
+      jtag_cfg = jtag_configuration::type_id::create( .name( "jtag_cfg" ) );
+      assert(uvm_config_db#(jtag_configuration)::get ( .cntxt( this ), .inst_name( "*" ), .field_name( "jtag_cfg" ), .value( this.jtag_cfg) ));
+
+      TCK_clk_cfg = TCK_clk_configuration::type_id::create( .name( "TCK_clk_cfg" ) );
+      assert(uvm_config_db#(TCK_clk_configuration)::get ( .cntxt( this ), .inst_name( "*" ), .field_name( "clk_cfg" ), .value( this.TCK_clk_cfg) ));
+
+      SYSCLK_clk_cfg = SYSCLK_clk_configuration::type_id::create( .name( "SYSCLK_clk_cfg" ) );
+      assert(uvm_config_db#(SYSCLK_clk_configuration)::get ( .cntxt( this ), .inst_name( "*" ), .field_name( "clk_cfg" ), .value( this.SYSCLK_clk_cfg) ));
+      
+      reset_cfg = reset_configuration::type_id::create( .name( "reset_cfg" ) );
+      assert(uvm_config_db#(reset_configuration)::get ( .cntxt( this ), .inst_name( "*" ), .field_name( "reset_cfg" ), .value( this.reset_cfg) ));
+
+      gen_stil_file = jtag_cfg.gen_stil_file;
+      stil_file_name = jtag_cfg.stil_file_name;
+      timing_window = TCK_clk_cfg.half_period * 2;
+      
+      pad_sem = new(1);
+      jtag_sem = new(1);
+      SYSCLK_sem = new(1);
+      TCK_sem = new(1);
+      reset_sem = new(1);
    endfunction: build_phase
    
    function void write( stil_info_transaction t);
-      reset_stil_info_tx = t; 
+      while(!reset_sem.try_get(1)) `uvm_info("stil_generator","try get semafore",UVM_DEBUG);
+      case({reset_ping_data_rdy, reset_pong_data_rdy})
+         2'b00: begin
+            reset_stil_info_tx_ping = t; 
+            reset_ping_data_rdy = 1;
+         end
+         2'b10: begin
+            reset_stil_info_tx_pong = t; 
+            reset_pong_data_rdy = 1;
+         end
+         2'b01: `uvm_error("stil_generator","Illegal data reday combination.")
+         2'b11: `uvm_error("stil_generator","Reset ping-pong buffer is full.")
+      endcase
+      reset_sem.put(1);
    endfunction: write
  
    function void write_jtag_drv( stil_info_transaction t);
-      jtag_stil_info_tx = t; 
+      while(!jtag_sem.try_get(1))`uvm_info("stil_generator","try get semafore",UVM_DEBUG);
+      case({jtag_ping_data_rdy, jtag_pong_data_rdy})
+         2'b00: begin
+            jtag_stil_info_tx_ping = t; 
+            jtag_ping_data_rdy = 1;
+         end
+         2'b10: begin
+            jtag_stil_info_tx_pong = t; 
+            jtag_pong_data_rdy = 1;
+         end
+         2'b01: `uvm_error("stil_generator","Illegal data reday combination.")
+         2'b11: `uvm_error("stil_generator","jtag ping-pong buffer is full.")
+      endcase
+      jtag_sem.put(1);
    endfunction: write_jtag_drv
    
-   function void write_clk_drv( stil_info_transaction t);
-      clk_stil_info_tx = t; 
-   endfunction: write_clk_drv
+   function void write_TCK_clk_drv( stil_info_transaction t);
+      while(!TCK_sem.try_get(1)) `uvm_info("stil_generator","try get semafore",UVM_DEBUG);
+      case({TCK_ping_data_rdy, TCK_pong_data_rdy})
+         2'b00: begin
+            TCK_stil_info_tx_ping = t; 
+            TCK_ping_data_rdy = 1;
+         end
+         2'b10: begin
+            TCK_stil_info_tx_pong = t; 
+            TCK_pong_data_rdy = 1;
+         end
+         2'b01: `uvm_error("stil_generator","Illegal data reday combination.")
+         2'b11: `uvm_error("stil_generator","TCK ping-pong buffer is full.")
+      endcase
+      TCK_sem.put(1);
+   endfunction: write_TCK_clk_drv
+   
+   function void write_SYSCLK_clk_drv( stil_info_transaction t);
+      while(!SYSCLK_sem.try_get(1))`uvm_info("stil_generator","try get semafore",UVM_DEBUG);
+      case({SYSCLK_ping_data_rdy, SYSCLK_pong_data_rdy})
+         2'b00: begin
+            SYSCLK_stil_info_tx_ping = t; 
+            SYSCLK_ping_data_rdy = 1;
+         end
+         2'b10: begin
+            SYSCLK_stil_info_tx_pong = t; 
+            SYSCLK_pong_data_rdy = 1;
+         end
+         2'b01: `uvm_error("stil_generator","Illegal data reday combination.")
+         2'b11: `uvm_error("stil_generator","SYSCLK ping-pong buffer is full.")
+      endcase
+      SYSCLK_sem.put(1);
+   endfunction: write_SYSCLK_clk_drv
    
    function void write_pad_drv( stil_info_transaction t);
-      pad_stil_info_tx = t; 
+      while(!pad_sem.try_get(1)) `uvm_info("stil_generator","try get semafore",UVM_DEBUG);
+      case({pad_ping_data_rdy, pad_pong_data_rdy})
+         2'b00: begin
+            pad_stil_info_tx_ping = t; 
+            pad_ping_data_rdy = 1;
+         end
+         2'b10: begin
+            pad_stil_info_tx_pong = t; 
+            pad_pong_data_rdy = 1;
+         end
+         2'b01: `uvm_error("stil_generator","Illegal data reday combination.")
+         2'b11: `uvm_error("stil_generator","pad ping-pong buffer is full.")
+      endcase
+      pad_sem.put(1);
    endfunction: write_pad_drv
-   
-   task run_phase(uvm_phase phase);
-      string            stil_str;
-      string            comment_str;
-      int               stil_fd;
+  
+   function void print_stil_header(int stil_fd);
+      string            s;
       
-      stil_fd = $fopen("jtag_1149_1_test.stil", "w");
+      assert(uvm_config_db#(TCK_clk_configuration)::get ( .cntxt( this ), .inst_name( "*" ), .field_name( "clk_cfg" ), .value( this.TCK_clk_cfg) ));
+      assert(uvm_config_db#(SYSCLK_clk_configuration)::get ( .cntxt( this ), .inst_name( "*" ), .field_name( "clk_cfg" ), .value( this.SYSCLK_clk_cfg) ));
+ 
+      `uvm_info("stil_generator",TCK_clk_cfg.convert2string,UVM_NONE);
+      $cast(TCK_clk_wave_des, TCK_clk_cfg.clk_wave_desc.clone());
+      SYSCLK_clk_wave_des = SYSCLK_clk_cfg.clk_wave_desc;
+      
+      $sformat(s,"%s STIL 1.0;\n",s);
+
+      //Print Signals block
+      $sformat(s,"%s Signals {\n",s);
+
+      foreach(jtag_cfg.pad_name[i]) $sformat(s,"%s \t%s\t%s;\n",s,jtag_cfg.pad_name[i],(jtag_cfg.pad_dir[i] ? (jtag_cfg.pad_dir[i] == 1 ? "Out" : "InOut") : "In"));
+      
+      foreach(reset_cfg.pad_name[i]) $sformat(s,"%s \t%s\t%s;\n",s,reset_cfg.pad_name[i],(reset_cfg.pad_dir[i] ? (reset_cfg.pad_dir[i] == 1 ? "Out" : "InOut") : "In"));
+      
+      foreach(TCK_clk_cfg.pad_name[i]) $sformat(s,"%s \t%s\t%s;\n",s,TCK_clk_cfg.pad_name[i],(TCK_clk_cfg.pad_dir[i] ? (TCK_clk_cfg.pad_dir[i] == 1 ? "Out" : "InOut") : "In"));
+      foreach(SYSCLK_clk_cfg.pad_name[i]) $sformat(s,"%s \t%s\t%s;\n",s,SYSCLK_clk_cfg.pad_name[i],(SYSCLK_clk_cfg.pad_dir[i] ? (SYSCLK_clk_cfg.pad_dir[i] == 1 ? "Out" : "InOut") : "In"));
+      $sformat(s,"%s}\n",s);
+      
+      //Print WaveformTable block
+      $sformat(s,"%s Timing basic {\n",s);
+      $sformat(s,"%s \t WaveformTable wave_form_table{\n",s);
+      $sformat(s,"%s \t\t Period '%dns';\n",s,timing_window);
+      $sformat(s,"%s \t\t Waveforms {\n",s);
+      
+      //Print TCK description
+      $sformat(s,"%s \t\t %s {\n",s, TCK_clk_cfg.pad_name[0]);
+      foreach(TCK_clk_wave_des.wave_desc[i]) 
+         $sformat(s,"%s \t\t\t %0d {%s}\n",s,i,TCK_clk_wave_des.wave_desc[i]);
+      $sformat(s,"%s \t\t }\n",s);
+
+     // //Print SYSCLK description
+     // $sformat(s,"%s \t\t %s {\n",s, SYSCLK_clk_cfg.pad_name[0]);
+     // foreach(SYSCLK_clk_wave_des.wave_desc[i]) 
+     //    $sformat(s,"%s \t\t\t %0d {%s}\n",s,i,SYSCLK_clk_wave_des.wave_desc[i]);
+     // $sformat(s,"%s \t\t }\n",s);
+
+      foreach(jtag_cfg.pad_name[i]) begin
+         if(jtag_cfg.pad_dir[i] == 0)
+            $sformat(s,"%s \t\t %s {01x {'0ns' D/U/Z;}}\n",s, jtag_cfg.pad_name[i]);
+         else if(jtag_cfg.pad_dir[i] == 1)
+            $sformat(s,"%s \t\t %s {LHX {'0ns' L/H/X;}}\n",s, jtag_cfg.pad_name[i]);
+         else begin 
+            $sformat(s,"%s \t\t %s {01x {'0ns' D/U/Z;}}\n",s, jtag_cfg.pad_name[i]);
+            $sformat(s,"%s \t\t {LHX {'0ns'Z; '1ns' L/H/X;}}\n",s);
+         end
+      end
+
+      foreach(reset_cfg.pad_name[i]) begin
+         if(reset_cfg.pad_dir[i] == 0)
+            $sformat(s,"%s \t\t %s {01x {'0ns' D/U/Z;}}\n",s, reset_cfg.pad_name[i]);
+         else if(reset_cfg.pad_dir[i] == 1)
+            $sformat(s,"%s \t\t %s {LHX {'0ns' L/H/X;}}\n",s, reset_cfg.pad_name[i]);
+         else begin 
+            $sformat(s,"%s \t\t %s {01x {'0ns' D/U/Z;}\n",s, reset_cfg.pad_name[i]);
+            $sformat(s,"%s \t\t LHX {'0ns'Z; '1ns' L/H/X;}}\n",s);
+         end
+      end
+      $sformat(s,"%s \t\t}\n",s);
+      $sformat(s,"%s \t}\n",s);
+      $sformat(s,"%s }\n",s);
+
+      //Print PatternBurst block
+      $sformat(s,"%s PatternBurst basic_burst {\n",s);
+      $sformat(s,"%s \t PatList { basic; }\n",s);
+      $sformat(s,"%s }\n",s);
+      
+      //Print PatternExec block
+      $sformat(s,"%s PatternExec {\n",s);
+      $sformat(s,"%s \t Timing  basic;\n",s);
+      $sformat(s,"%s \t PatternBurst basic_burst;\n",s);
+      $sformat(s,"%s }\n",s);
+
+      //Print Patternblock
+      $sformat(s,"%s Pattern basic{\n",s);
+      $sformat(s,"%s \t W wave_form_table;\n",s);
+      $fdisplay(stil_fd,s);
+   endfunction: print_stil_header
+
+   function void update_ping_pong_buffer(ref bit ping_data_rdy, pong_data_rdy, ref stil_info_transaction ping_stil_info_tx, pong_stil_info_tx);
+      `uvm_info("stil_generator","before proces... ",UVM_NONE);
+      `uvm_info("stil_generator",$sformatf("ping_data_rdy = %0b, pong_data_rdy = %0b",ping_data_rdy, pong_data_rdy),UVM_NONE);
+      
+      case({ping_data_rdy,pong_data_rdy})
+         //2'b00:
+         2'b10: begin
+            if(ping_stil_info_tx.comment_info.len() != 0) comment_str = {comment_str, ping_stil_info_tx.comment_info};
+            stil_str = {stil_str, ping_stil_info_tx.stil_info};
+            ping_data_rdy = 1'b0;
+         end
+         2'b11: begin
+            if(ping_stil_info_tx.comment_info.len() != 0) comment_str = {comment_str, ping_stil_info_tx.comment_info};
+            stil_str = {stil_str, ping_stil_info_tx.stil_info};
+            ping_data_rdy = 1'b1;
+            pong_data_rdy = 1'b0;
+            ping_stil_info_tx = pong_stil_info_tx;
+         end
+         2'b01: `uvm_error("stil_generator","Illegal data reday combination.")
+      endcase
+      
+      `uvm_info("stil_generator","after proces... ",UVM_NONE);
+      `uvm_info("stil_generator",$sformatf("ping_data_rdy = %0b, pong_data_rdy = %0b",ping_data_rdy, pong_data_rdy),UVM_NONE);
+      `uvm_info("stil_generator",$sformatf("stil_str = %s, comment_str = %s",stil_str, comment_str),UVM_NONE);
+
+   endfunction: update_ping_pong_buffer
+
+   task run_phase(uvm_phase phase);
+      
+      stil_fd = $fopen(stil_file_name, "w");
+      if(gen_stil_file) #1 print_stil_header(stil_fd);
       forever begin
-         if(jtag_stil_info_tx != null) begin
-            `uvm_info("stil_generator",jtag_stil_info_tx.convert2string,UVM_NONE);
+         if(TCK_ping_data_rdy && TCK_pong_data_rdy || SYSCLK_ping_data_rdy && SYSCLK_pong_data_rdy ||
+            jtag_pong_data_rdy && jtag_ping_data_rdy || pad_ping_data_rdy && pad_pong_data_rdy ||
+            reset_ping_data_rdy && reset_pong_data_rdy)begin
+               
+               while(!pad_sem.try_get(1)) `uvm_info("stil_generator","try get semafore",UVM_DEBUG);
+               while(!TCK_sem.try_get(1)) `uvm_info("stil_generator","try get semafore",UVM_DEBUG);
+               while(!SYSCLK_sem.try_get(1))`uvm_info("stil_generator","try get semafore",UVM_DEBUG);
+               while(!jtag_sem.try_get(1))`uvm_info("stil_generator","try get semafore",UVM_DEBUG);
+               while(!reset_sem.try_get(1)) `uvm_info("stil_generator","try get semafore",UVM_DEBUG);
 
-            if(jtag_stil_info_tx_pre == null) begin
-               jtag_stil_info_tx_pre = stil_info_transaction::type_id::create("jtag_stil_info_tx_pre");
-               $cast(jtag_stil_info_tx_pre, jtag_stil_info_tx.clone());
-               stil_str = {stil_str,jtag_stil_info_tx_pre.stil_info};
+               `uvm_info("stil_generator","check TCK stil_info_transaction",UVM_NONE);
+               update_ping_pong_buffer(TCK_ping_data_rdy,TCK_pong_data_rdy,TCK_stil_info_tx_ping,TCK_stil_info_tx_pong);
+               
+               `uvm_info("stil_generator","check pad stil_info_transaction",UVM_NONE);
+               update_ping_pong_buffer(pad_ping_data_rdy,pad_pong_data_rdy,pad_stil_info_tx_ping,pad_stil_info_tx_pong);
+               
+               `uvm_info("stil_generator","check reset stil_info_transaction",UVM_NONE);
+               update_ping_pong_buffer(reset_ping_data_rdy,reset_pong_data_rdy,reset_stil_info_tx_ping,reset_stil_info_tx_pong);
+               
+               `uvm_info("stil_generator","check jtag stil_info_transaction",UVM_NONE);
+               update_ping_pong_buffer(jtag_ping_data_rdy,jtag_pong_data_rdy,jtag_stil_info_tx_ping,jtag_stil_info_tx_pong);
+               
+               `uvm_info("stil_generator","check SYSCLK stil_info_transaction",UVM_NONE);
+               update_ping_pong_buffer(SYSCLK_ping_data_rdy,SYSCLK_pong_data_rdy,SYSCLK_stil_info_tx_ping,SYSCLK_stil_info_tx_pong);
 
-               if(!jtag_stil_info_tx_pre.comment_info.len() == 0) comment_str = {comment_str,jtag_stil_info_tx_pre.comment_info};
+               TCK_sem.put(1);   
+               SYSCLK_sem.put(1);   
+               jtag_sem.put(1);   
+               pad_sem.put(1);   
+               reset_sem.put(1);   
+
                write_to_file = 1;
-            end
-            else if(jtag_stil_info_tx_pre.time_stamp != jtag_stil_info_tx.time_stamp) begin
-               //`uvm_info("stil_generator",jtag_stil_info_tx_pre.convert2string,UVM_NONE);
-               $cast(jtag_stil_info_tx_pre, jtag_stil_info_tx.clone());
-               stil_str = {stil_str,jtag_stil_info_tx_pre.stil_info};
-               if(!jtag_stil_info_tx_pre.comment_info.len() == 0) comment_str = {comment_str,jtag_stil_info_tx_pre.comment_info};
-               write_to_file = 1;
-               `uvm_info("stil_generator",jtag_stil_info_tx_pre.convert2string,UVM_NONE);
-            end
          end
-         if(clk_stil_info_tx != null) begin
-            `uvm_info("stil_generator",clk_stil_info_tx.convert2string,UVM_NONE);
-            if(clk_stil_info_tx_pre == null) begin
-               clk_stil_info_tx_pre = stil_info_transaction::type_id::create("clk_stil_info_tx_pre");
-               $cast(clk_stil_info_tx_pre, clk_stil_info_tx.clone());
-               stil_str = {stil_str,clk_stil_info_tx_pre.stil_info};
-               if(!clk_stil_info_tx_pre.comment_info.len() == 0) comment_str = {comment_str,clk_stil_info_tx_pre.comment_info};
-               write_to_file = 1;
-            end
-            else if(clk_stil_info_tx_pre.time_stamp != clk_stil_info_tx.time_stamp) begin
-               //`uvm_info("stil_generator",clk_stil_info_tx_pre.convert2string,UVM_NONE);
-               $cast(clk_stil_info_tx_pre, clk_stil_info_tx.clone());
-               stil_str = {stil_str,clk_stil_info_tx_pre.stil_info};
-               if(!clk_stil_info_tx_pre.comment_info.len() == 0) comment_str = {comment_str,clk_stil_info_tx_pre.comment_info};
-               write_to_file = 1;
-            end
-         end
-
-         if(pad_stil_info_tx != null) begin
-            `uvm_info("stil_generator",pad_stil_info_tx.convert2string,UVM_NONE);
-            if(pad_stil_info_tx_pre == null) begin
-               pad_stil_info_tx_pre = stil_info_transaction::type_id::create("pad_stil_info_tx_pre");
-               $cast(pad_stil_info_tx_pre, pad_stil_info_tx.clone());
-               stil_str = {stil_str,pad_stil_info_tx_pre.stil_info};
-               if(!pad_stil_info_tx_pre.comment_info.len() == 0) comment_str = {comment_str,pad_stil_info_tx_pre.comment_info};
-               write_to_file = 1;
-            end
-            else if(pad_stil_info_tx_pre.time_stamp != pad_stil_info_tx.time_stamp) begin
-               //`uvm_info("stil_generator",pad_stil_info_tx_pre.convert2string,UVM_NONE);
-               $cast(pad_stil_info_tx_pre, pad_stil_info_tx.clone());
-               stil_str = {stil_str,pad_stil_info_tx_pre.stil_info};
-               if(!pad_stil_info_tx_pre.comment_info.len() == 0) comment_str = {comment_str,pad_stil_info_tx_pre.comment_info};
-               write_to_file = 1;
-            end
-         end
-
-         if(reset_stil_info_tx != null) begin
-            `uvm_info("stil_generator",reset_stil_info_tx.convert2string,UVM_NONE);
-            if(reset_stil_info_tx_pre == null) begin
-               reset_stil_info_tx_pre = stil_info_transaction::type_id::create("reset_stil_info_tx_pre");
-               $cast(reset_stil_info_tx_pre, reset_stil_info_tx.clone());
-               stil_str = {stil_str,reset_stil_info_tx_pre.stil_info};
-               if(!reset_stil_info_tx_pre.comment_info.len() == 0) comment_str = {comment_str,reset_stil_info_tx_pre.comment_info};
-               write_to_file = 1;
-            end
-            else if(reset_stil_info_tx_pre.time_stamp != reset_stil_info_tx.time_stamp) begin
-               //`uvm_info("stil_generator",reset_stil_info_tx_pre.convert2string,UVM_NONE);
-               $cast(reset_stil_info_tx_pre, reset_stil_info_tx.clone());
-               stil_str = {stil_str,reset_stil_info_tx_pre.stil_info};
-               if(!reset_stil_info_tx_pre.comment_info.len() == 0) comment_str = {comment_str,reset_stil_info_tx_pre.comment_info};
-               write_to_file = 1;
-            end
-         end
-
+         
          if(write_to_file) begin
-            `uvm_info("stil_generator",comment_str,UVM_NONE);
-            `uvm_info("stil_generator",stil_str,UVM_NONE);
-            if(comment_str.len() != 0) $fdisplay(stil_fd,{"#",comment_str});
-            $fdisplay(stil_fd,{"V { ",stil_str, " }"});
+            //`uvm_info("stil_generator",comment_str,UVM_NONE);
+            //`uvm_info("stil_generator",stil_str,UVM_NONE);
+            if(comment_str.len() != 0) $fdisplay(stil_fd,{"//",comment_str});
+            $fdisplay(stil_fd,{"\t V { ",stil_str, " }"});
+            //`uvm_info("stil_generator",stil_str,UVM_NONE);
             write_to_file = 0;
             stil_str = "";
             comment_str= "";
@@ -1910,6 +2337,12 @@ class stil_generator extends uvm_subscriber #( stil_info_transaction );
          else #1;
       end
    endtask: run_phase
+
+
+   function void final_phase( uvm_phase phase );
+      super.final_phase( phase );
+      if(gen_stil_file)$fdisplay(stil_fd,"\}");
+   endfunction: final_phase
 endclass:stil_generator
 
    
@@ -2247,7 +2680,8 @@ class jtag_env extends uvm_env;
    jtag_scoreboard      scoreboard;
    jtag_configuration   cfg;
    //jtag_reg_predictor   reg_predictor;
-   clk_driver           clk_drv;
+   TCK_clk_driver       TCK_clk_drv;
+   SYSCLK_clk_driver    SYSCLK_clk_drv;
    reset_driver         reset_drv;
    pad_driver           pad_drv;
 
@@ -2261,7 +2695,8 @@ class jtag_env extends uvm_env;
       scoreboard = jtag_scoreboard::type_id::create (.name( "scoreboard" ), .parent(this));
       //reg_predictor = jtag_reg_predictor::type_id::create(.name( "reg_predictor" ), .parent(this));
       
-      clk_drv = clk_driver::type_id::create(.name( "clk_drv" ), .parent(this));
+      TCK_clk_drv = TCK_clk_driver::type_id::create(.name( "TCK_clk_drv" ), .parent(this));
+      SYSCLK_clk_drv = SYSCLK_clk_driver::type_id::create(.name( "SYSCLK_clk_drv" ), .parent(this));
       reset_drv = reset_driver::type_id::create(.name( "reset_drv" ), .parent(this));
       pad_drv = pad_driver::type_id::create(.name( "pad_drv" ), .parent(this));
       stil_gen = stil_generator::type_id::create(.name( "stil_gen" ), .parent(this));
@@ -2274,7 +2709,8 @@ class jtag_env extends uvm_env;
    function void connect_phase( uvm_phase phase );
       agent.jtag_ap.connect(scoreboard.analysis_export);
       agent.drv.jtag_drv_ap.connect(stil_gen.jtag_drv_imp_export); 
-      clk_drv.clk_drv_ap.connect(stil_gen.clk_drv_imp_export); 
+      TCK_clk_drv.clk_drv_ap.connect(stil_gen.TCK_clk_drv_imp_export); 
+      SYSCLK_clk_drv.clk_drv_ap.connect(stil_gen.SYSCLK_clk_drv_imp_export); 
       pad_drv.pad_drv_ap.connect(stil_gen.pad_drv_imp_export); 
       reset_drv.reset_drv_ap.connect(stil_gen.analysis_export); 
 
