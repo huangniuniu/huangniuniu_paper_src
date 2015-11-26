@@ -1796,7 +1796,7 @@ class dft_register_adapter extends uvm_reg_adapter;
       ext_wr_data_length = 0;
 
       if(!$cast(extension,item.extension))
-         `uvm_error("reg2bus", "Extension casting failed.");
+         `uvm_error("reg2bus", "Extension casting failed.")
 
       if( extension != null ) begin
          dft_reg_tx.extension = extension;
@@ -1868,7 +1868,7 @@ class ieee_1149_1_reg_adapter extends uvm_reg_adapter;
 
       
       if(!$cast(extension,item.extension))
-         `uvm_error("reg2bus", "Extension casting failed.");
+         `uvm_error("reg2bus", "Extension casting failed.")
 
       if( extension != null ) begin
          jtag_tx.chk_ir_tdo = extension.chk_ir_tdo;
@@ -1993,11 +1993,21 @@ class stil_generator extends uvm_subscriber #( stil_info_transaction );
    clk_wave_description       TCK_clk_wave_des;
    clk_wave_description       SYSCLK_clk_wave_des;
    
-   stil_info_transaction      pad_stil_info_tx,pad_stil_info_tx_pre;
-   stil_info_transaction      reset_stil_info_tx,reset_stil_info_tx_pre;
-   stil_info_transaction      TCK_clk_stil_info_tx,TCK_clk_stil_info_tx_pre;
-   stil_info_transaction      SYSCLK_clk_stil_info_tx,SYSCLK_clk_stil_info_tx_pre;
-   stil_info_transaction      jtag_stil_info_tx,jtag_stil_info_tx_pre;
+   stil_info_transaction      pad_stil_info_tx_ping,pad_stil_info_tx_pong;
+   stil_info_transaction      reset_stil_info_tx_ping,reset_stil_info_tx_pong;
+   stil_info_transaction      TCK_stil_info_tx_ping,TCK_stil_info_tx_pong;
+   stil_info_transaction      SYSCLK_stil_info_tx_ping,SYSCLK_stil_info_tx_pong;
+   stil_info_transaction      jtag_stil_info_tx_ping,jtag_stil_info_tx_pong;
+  
+   bit                        pad_ping_data_rdy, pad_pong_data_rdy;
+   bit                        jtag_ping_data_rdy, jtag_pong_data_rdy;
+   bit                        SYSCLK_ping_data_rdy, SYSCLK_pong_data_rdy;
+   bit                        TCK_ping_data_rdy, TCK_pong_data_rdy;
+   bit                        reset_ping_data_rdy, reset_pong_data_rdy;
+  
+   string                     stil_str;
+   string                     comment_str;
+   semaphore                  pad_sem, jtag_sem, SYSCLK_sem, TCK_sem, reset_sem; 
 
    function new( string name, uvm_component parent );
       super.new( name, parent );
@@ -2030,26 +2040,96 @@ class stil_generator extends uvm_subscriber #( stil_info_transaction );
       stil_file_name = jtag_cfg.stil_file_name;
       timing_window = TCK_clk_cfg.half_period * 2;
       
+      pad_sem = new(1);
+      jtag_sem = new(1);
+      SYSCLK_sem = new(1);
+      TCK_sem = new(1);
+      reset_sem = new(1);
    endfunction: build_phase
    
    function void write( stil_info_transaction t);
-      reset_stil_info_tx = t; 
+      while(!reset_sem.try_get(1)) `uvm_info("stil_generator","try get semafore",UVM_DEBUG);
+      case({reset_ping_data_rdy, reset_pong_data_rdy})
+         2'b00: begin
+            reset_stil_info_tx_ping = t; 
+            reset_ping_data_rdy = 1;
+         end
+         2'b10: begin
+            reset_stil_info_tx_pong = t; 
+            reset_pong_data_rdy = 1;
+         end
+         2'b01: `uvm_error("stil_generator","Illegal data reday combination.")
+         2'b11: `uvm_error("stil_generator","Reset ping-pong buffer is full.")
+      endcase
+      reset_sem.put(1);
    endfunction: write
  
    function void write_jtag_drv( stil_info_transaction t);
-      jtag_stil_info_tx = t; 
+      while(!jtag_sem.try_get(1))`uvm_info("stil_generator","try get semafore",UVM_DEBUG);
+      case({jtag_ping_data_rdy, jtag_pong_data_rdy})
+         2'b00: begin
+            jtag_stil_info_tx_ping = t; 
+            jtag_ping_data_rdy = 1;
+         end
+         2'b10: begin
+            jtag_stil_info_tx_pong = t; 
+            jtag_pong_data_rdy = 1;
+         end
+         2'b01: `uvm_error("stil_generator","Illegal data reday combination.")
+         2'b11: `uvm_error("stil_generator","jtag ping-pong buffer is full.")
+      endcase
+      jtag_sem.put(1);
    endfunction: write_jtag_drv
    
    function void write_TCK_clk_drv( stil_info_transaction t);
-      TCK_clk_stil_info_tx = t; 
+      while(!TCK_sem.try_get(1)) `uvm_info("stil_generator","try get semafore",UVM_DEBUG);
+      case({TCK_ping_data_rdy, TCK_pong_data_rdy})
+         2'b00: begin
+            TCK_stil_info_tx_ping = t; 
+            TCK_ping_data_rdy = 1;
+         end
+         2'b10: begin
+            TCK_stil_info_tx_pong = t; 
+            TCK_pong_data_rdy = 1;
+         end
+         2'b01: `uvm_error("stil_generator","Illegal data reday combination.")
+         2'b11: `uvm_error("stil_generator","TCK ping-pong buffer is full.")
+      endcase
+      TCK_sem.put(1);
    endfunction: write_TCK_clk_drv
    
    function void write_SYSCLK_clk_drv( stil_info_transaction t);
-      SYSCLK_clk_stil_info_tx = t; 
+      while(!SYSCLK_sem.try_get(1))`uvm_info("stil_generator","try get semafore",UVM_DEBUG);
+      case({SYSCLK_ping_data_rdy, SYSCLK_pong_data_rdy})
+         2'b00: begin
+            SYSCLK_stil_info_tx_ping = t; 
+            SYSCLK_ping_data_rdy = 1;
+         end
+         2'b10: begin
+            SYSCLK_stil_info_tx_pong = t; 
+            SYSCLK_pong_data_rdy = 1;
+         end
+         2'b01: `uvm_error("stil_generator","Illegal data reday combination.")
+         2'b11: `uvm_error("stil_generator","SYSCLK ping-pong buffer is full.")
+      endcase
+      SYSCLK_sem.put(1);
    endfunction: write_SYSCLK_clk_drv
    
    function void write_pad_drv( stil_info_transaction t);
-      pad_stil_info_tx = t; 
+      while(!pad_sem.try_get(1)) `uvm_info("stil_generator","try get semafore",UVM_DEBUG);
+      case({pad_ping_data_rdy, pad_pong_data_rdy})
+         2'b00: begin
+            pad_stil_info_tx_ping = t; 
+            pad_ping_data_rdy = 1;
+         end
+         2'b10: begin
+            pad_stil_info_tx_pong = t; 
+            pad_pong_data_rdy = 1;
+         end
+         2'b01: `uvm_error("stil_generator","Illegal data reday combination.")
+         2'b11: `uvm_error("stil_generator","pad ping-pong buffer is full.")
+      endcase
+      pad_sem.put(1);
    endfunction: write_pad_drv
   
    function void print_stil_header(int stil_fd);
@@ -2135,109 +2215,77 @@ class stil_generator extends uvm_subscriber #( stil_info_transaction );
       $fdisplay(stil_fd,s);
    endfunction: print_stil_header
 
+   function void update_ping_pong_buffer(ref bit ping_data_rdy, pong_data_rdy, ref stil_info_transaction ping_stil_info_tx, pong_stil_info_tx);
+      `uvm_info("stil_generator","before proces... ",UVM_NONE);
+      `uvm_info("stil_generator",$sformatf("ping_data_rdy = %0b, pong_data_rdy = %0b",ping_data_rdy, pong_data_rdy),UVM_NONE);
+      
+      case({ping_data_rdy,pong_data_rdy})
+         //2'b00:
+         2'b10: begin
+            if(ping_stil_info_tx.comment_info.len() != 0) comment_str = {comment_str, ping_stil_info_tx.comment_info};
+            stil_str = {stil_str, ping_stil_info_tx.stil_info};
+            ping_data_rdy = 1'b0;
+         end
+         2'b11: begin
+            if(ping_stil_info_tx.comment_info.len() != 0) comment_str = {comment_str, ping_stil_info_tx.comment_info};
+            stil_str = {stil_str, ping_stil_info_tx.stil_info};
+            ping_data_rdy = 1'b1;
+            pong_data_rdy = 1'b0;
+            ping_stil_info_tx = pong_stil_info_tx;
+         end
+         2'b01: `uvm_error("stil_generator","Illegal data reday combination.")
+      endcase
+      
+      `uvm_info("stil_generator","after proces... ",UVM_NONE);
+      `uvm_info("stil_generator",$sformatf("ping_data_rdy = %0b, pong_data_rdy = %0b",ping_data_rdy, pong_data_rdy),UVM_NONE);
+      `uvm_info("stil_generator",$sformatf("stil_str = %s, comment_str = %s",stil_str, comment_str),UVM_NONE);
+
+   endfunction: update_ping_pong_buffer
+
+
 
    task run_phase(uvm_phase phase);
-      string            stil_str;
-      string            comment_str;
       
       stil_fd = $fopen(stil_file_name, "w");
       if(gen_stil_file) #1 print_stil_header(stil_fd);
       forever begin
-         if(jtag_stil_info_tx != null) begin
-            //`uvm_info("stil_generator",jtag_stil_info_tx.convert2string,UVM_NONE);
+         if(TCK_ping_data_rdy && TCK_pong_data_rdy || SYSCLK_ping_data_rdy && SYSCLK_pong_data_rdy ||
+            jtag_pong_data_rdy && jtag_ping_data_rdy || pad_ping_data_rdy && pad_pong_data_rdy ||
+            reset_ping_data_rdy && reset_pong_data_rdy)begin
+               
+               while(!pad_sem.try_get(1)) `uvm_info("stil_generator","try get semafore",UVM_DEBUG);
+               while(!TCK_sem.try_get(1)) `uvm_info("stil_generator","try get semafore",UVM_DEBUG);
+               while(!SYSCLK_sem.try_get(1))`uvm_info("stil_generator","try get semafore",UVM_DEBUG);
+               while(!jtag_sem.try_get(1))`uvm_info("stil_generator","try get semafore",UVM_DEBUG);
+               while(!reset_sem.try_get(1)) `uvm_info("stil_generator","try get semafore",UVM_DEBUG);
 
-            if(jtag_stil_info_tx_pre == null) begin
-               jtag_stil_info_tx_pre = stil_info_transaction::type_id::create("jtag_stil_info_tx_pre");
-               $cast(jtag_stil_info_tx_pre, jtag_stil_info_tx.clone());
-               stil_str = {stil_str,jtag_stil_info_tx_pre.stil_info};
+               `uvm_info("stil_generator","check TCK stil_info_transaction",UVM_NONE);
+               update_ping_pong_buffer(TCK_ping_data_rdy,TCK_pong_data_rdy,TCK_stil_info_tx_ping,TCK_stil_info_tx_pong);
+               
+               `uvm_info("stil_generator","check pad stil_info_transaction",UVM_NONE);
+               update_ping_pong_buffer(pad_ping_data_rdy,pad_pong_data_rdy,pad_stil_info_tx_ping,pad_stil_info_tx_pong);
+               
+               `uvm_info("stil_generator","check reset stil_info_transaction",UVM_NONE);
+               update_ping_pong_buffer(reset_ping_data_rdy,reset_pong_data_rdy,reset_stil_info_tx_ping,reset_stil_info_tx_pong);
+               
+               `uvm_info("stil_generator","check jtag stil_info_transaction",UVM_NONE);
+               update_ping_pong_buffer(jtag_ping_data_rdy,jtag_pong_data_rdy,jtag_stil_info_tx_ping,jtag_stil_info_tx_pong);
+               
+               `uvm_info("stil_generator","check SYSCLK stil_info_transaction",UVM_NONE);
+               update_ping_pong_buffer(SYSCLK_ping_data_rdy,SYSCLK_pong_data_rdy,SYSCLK_stil_info_tx_ping,SYSCLK_stil_info_tx_pong);
 
-               if(!jtag_stil_info_tx_pre.comment_info.len() == 0) comment_str = {comment_str,jtag_stil_info_tx_pre.comment_info};
+               TCK_sem.put(1);   
+               SYSCLK_sem.put(1);   
+               jtag_sem.put(1);   
+               pad_sem.put(1);   
+               reset_sem.put(1);   
+
                write_to_file = 1;
-            end
-            else if(jtag_stil_info_tx_pre.time_stamp != jtag_stil_info_tx.time_stamp) begin
-               //`uvm_info("stil_generator",jtag_stil_info_tx_pre.convert2string,UVM_NONE);
-               $cast(jtag_stil_info_tx_pre, jtag_stil_info_tx.clone());
-               stil_str = {stil_str,jtag_stil_info_tx_pre.stil_info};
-               if(!jtag_stil_info_tx_pre.comment_info.len() == 0) comment_str = {comment_str,jtag_stil_info_tx_pre.comment_info};
-               write_to_file = 1;
-               //`uvm_info("stil_generator",jtag_stil_info_tx_pre.convert2string,UVM_NONE);
-            end
          end
-         if(TCK_clk_stil_info_tx != null) begin
-            //`uvm_info("stil_generator",TCK_clk_stil_info_tx.convert2string,UVM_NONE);
-            if(TCK_clk_stil_info_tx_pre == null) begin
-               TCK_clk_stil_info_tx_pre = stil_info_transaction::type_id::create("TCK_clk_stil_info_tx_pre");
-               $cast(TCK_clk_stil_info_tx_pre, TCK_clk_stil_info_tx.clone());
-               stil_str = {stil_str,TCK_clk_stil_info_tx_pre.stil_info};
-               if(!TCK_clk_stil_info_tx_pre.comment_info.len() == 0) comment_str = {comment_str,TCK_clk_stil_info_tx_pre.comment_info};
-               write_to_file = 1;
-            end
-            else if(TCK_clk_stil_info_tx_pre.time_stamp != TCK_clk_stil_info_tx.time_stamp) begin
-               //`uvm_info("stil_generator",TCK_clk_stil_info_tx_pre.convert2string,UVM_NONE);
-               $cast(TCK_clk_stil_info_tx_pre, TCK_clk_stil_info_tx.clone());
-               stil_str = {stil_str,TCK_clk_stil_info_tx_pre.stil_info};
-               if(!TCK_clk_stil_info_tx_pre.comment_info.len() == 0) comment_str = {comment_str,TCK_clk_stil_info_tx_pre.comment_info};
-               write_to_file = 1;
-            end
-         end
-         if(SYSCLK_clk_stil_info_tx != null) begin
-            //`uvm_info("stil_generator",SYSCLK_clk_stil_info_tx.convert2string,UVM_NONE);
-            if(SYSCLK_clk_stil_info_tx_pre == null) begin
-               SYSCLK_clk_stil_info_tx_pre = stil_info_transaction::type_id::create("SYSCLK_clk_stil_info_tx_pre");
-               $cast(SYSCLK_clk_stil_info_tx_pre, SYSCLK_clk_stil_info_tx.clone());
-               stil_str = {stil_str,SYSCLK_clk_stil_info_tx_pre.stil_info};
-               if(!SYSCLK_clk_stil_info_tx_pre.comment_info.len() == 0) comment_str = {comment_str,SYSCLK_clk_stil_info_tx_pre.comment_info};
-               write_to_file = 1;
-            end
-            else if(SYSCLK_clk_stil_info_tx_pre.time_stamp != SYSCLK_clk_stil_info_tx.time_stamp) begin
-               //`uvm_info("stil_generator",SYSCLK_clk_stil_info_tx_pre.convert2string,UVM_NONE);
-               $cast(SYSCLK_clk_stil_info_tx_pre, SYSCLK_clk_stil_info_tx.clone());
-               stil_str = {stil_str,SYSCLK_clk_stil_info_tx_pre.stil_info};
-               if(!SYSCLK_clk_stil_info_tx_pre.comment_info.len() == 0) comment_str = {comment_str,SYSCLK_clk_stil_info_tx_pre.comment_info};
-               write_to_file = 1;
-            end
-         end
-
-
-         if(pad_stil_info_tx != null) begin
-            //`uvm_info("stil_generator",pad_stil_info_tx.convert2string,UVM_NONE);
-            if(pad_stil_info_tx_pre == null) begin
-               pad_stil_info_tx_pre = stil_info_transaction::type_id::create("pad_stil_info_tx_pre");
-               $cast(pad_stil_info_tx_pre, pad_stil_info_tx.clone());
-               stil_str = {stil_str,pad_stil_info_tx_pre.stil_info};
-               if(!pad_stil_info_tx_pre.comment_info.len() == 0) comment_str = {comment_str,pad_stil_info_tx_pre.comment_info};
-               write_to_file = 1;
-            end
-            else if(pad_stil_info_tx_pre.time_stamp != pad_stil_info_tx.time_stamp) begin
-               //`uvm_info("stil_generator",pad_stil_info_tx_pre.convert2string,UVM_NONE);
-               $cast(pad_stil_info_tx_pre, pad_stil_info_tx.clone());
-               stil_str = {stil_str,pad_stil_info_tx_pre.stil_info};
-               if(!pad_stil_info_tx_pre.comment_info.len() == 0) comment_str = {comment_str,pad_stil_info_tx_pre.comment_info};
-               write_to_file = 1;
-            end
-         end
-
-         if(reset_stil_info_tx != null) begin
-            //`uvm_info("stil_generator",reset_stil_info_tx.convert2string,UVM_NONE);
-            if(reset_stil_info_tx_pre == null) begin
-               reset_stil_info_tx_pre = stil_info_transaction::type_id::create("reset_stil_info_tx_pre");
-               $cast(reset_stil_info_tx_pre, reset_stil_info_tx.clone());
-               stil_str = {stil_str,reset_stil_info_tx_pre.stil_info};
-               if(!reset_stil_info_tx_pre.comment_info.len() == 0) comment_str = {comment_str,reset_stil_info_tx_pre.comment_info};
-               write_to_file = 1;
-            end
-            else if(reset_stil_info_tx_pre.time_stamp != reset_stil_info_tx.time_stamp) begin
-               //`uvm_info("stil_generator",reset_stil_info_tx_pre.convert2string,UVM_NONE);
-               $cast(reset_stil_info_tx_pre, reset_stil_info_tx.clone());
-               stil_str = {stil_str,reset_stil_info_tx_pre.stil_info};
-               if(!reset_stil_info_tx_pre.comment_info.len() == 0) comment_str = {comment_str,reset_stil_info_tx_pre.comment_info};
-               write_to_file = 1;
-            end
-         end
-
+        
          if(write_to_file) begin
-            //`uvm_info("stil_generator",comment_str,UVM_NONE);
-            //`uvm_info("stil_generator",stil_str,UVM_NONE);
+            `uvm_info("stil_generator",{"final comment_str = ",comment_str},UVM_NONE);
+            `uvm_info("stil_generator",{"final stil_str = ",stil_str},UVM_NONE);
             if(comment_str.len() != 0) $fdisplay(stil_fd,{"//",comment_str});
             $fdisplay(stil_fd,{"\t V { ",stil_str, " }"});
             write_to_file = 0;

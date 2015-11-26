@@ -91,7 +91,7 @@ class jtag_1149_1_test extends jtag_base_test;
       TCK_clk_cfg.half_period = `TCK_HALF_PERIOD;
       TCK_clk_cfg.free_running = 0;
       
-      SYSCLK_clk_cfg.gen_stil_file = `OFF;
+      SYSCLK_clk_cfg.gen_stil_file = `ON;
       SYSCLK_clk_cfg.half_period = `SYSCLK_HALF_PERIOD;
       SYSCLK_clk_cfg.free_running = 1;
       
