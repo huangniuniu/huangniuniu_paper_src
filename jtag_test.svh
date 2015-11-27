@@ -68,6 +68,73 @@ class jtag_base_test extends uvm_test;
 endclass: jtag_base_test
 
 //---------------------------------------------------------------------------
+// Class: jtag_simple_test
+//---------------------------------------------------------------------------
+
+class jtag_simple_test extends jtag_base_test;
+   `uvm_component_utils( jtag_simple_test )
+   string         report_id = "jtag_simple_test" ; 
+   function new( string name, uvm_component parent );
+      super.new( name, parent );
+      //factory.set_type_override_by_name("jtag_driver","jtag_driver_atpg","*");
+      //jtag_driver::type_id::set_type_override(jtag_driver_atpg::get_type(),1);
+   endfunction: new
+   
+   function void build_phase( uvm_phase phase);
+      super.build_phase( phase );
+
+      jtag_cfg.gen_stil_file = `ON;
+      jtag_cfg.stil_file_name = "jtag_simple_test.stil";
+      jtag_cfg.tck_half_period = `TCK_HALF_PERIOD;
+      
+      TCK_clk_cfg.gen_stil_file = `ON;
+      TCK_clk_cfg.half_period = `TCK_HALF_PERIOD;
+      TCK_clk_cfg.free_running = 0;
+      
+      SYSCLK_clk_cfg.gen_stil_file = `OFF;
+      SYSCLK_clk_cfg.half_period = `SYSCLK_HALF_PERIOD;
+      SYSCLK_clk_cfg.free_running = 1;
+      
+      reset_cfg.gen_stil_file = `ON;
+
+      jtag_cfg.pad_info_init();
+      TCK_clk_cfg.pad_info_init();
+      SYSCLK_clk_cfg.pad_info_init();
+      reset_cfg.pad_info_init();
+
+      uvm_config_db#( jtag_configuration )::set( .cntxt( this ), .inst_name( "*" ), .field_name( "jtag_cfg" ), .value( jtag_cfg ) );
+      uvm_config_db#( TCK_clk_configuration )::set( .cntxt( this ), .inst_name( "*" ), .field_name( "clk_cfg" ), .value( TCK_clk_cfg ) );
+      uvm_config_db#( SYSCLK_clk_configuration )::set( .cntxt( this ), .inst_name( "*" ), .field_name( "clk_cfg" ), .value( SYSCLK_clk_cfg ) );
+      uvm_config_db#( reset_configuration )::set( .cntxt( this ), .inst_name( "*" ), .field_name( "reset_cfg" ), .value( reset_cfg ) );
+      
+      `uvm_info(report_id,jtag_cfg.convert2string,UVM_DEBUG);
+   endfunction: build_phase
+
+   task main_phase( uvm_phase phase);
+      one_operation_jtag_sequence         jtag_reg_seq;
+      
+      phase.raise_objection( .obj( this ), .description( "start of test" ));
+
+      jtag_reg_seq = one_operation_jtag_sequence::type_id::create( "jtag_reg_seq" );
+      jtag_reg_seq.start( env.agent.sqr);
+      
+      phase.drop_objection( .obj( this ), .description( "end of test" ));
+   endtask: main_phase
+
+   //function void report_phase(uvm_phase phase);
+   //   string            stil_str;
+   //   int               stil_fd;
+   //   phase.raise_objection( .obj( this ), .description( "start of report_phase" ));
+   //   if(jtag_cfg.gen_stil_file == `ON) begin
+   //      stil_fd = $fopen("jtag_simple_test.stil", "a");
+   //      stil_str = $sformatf("}\n");
+   //      $fdisplay(stil_fd,stil_str);
+   //   end
+   //   phase.drop_objection( .obj( this ), .description( "end of report_phase" ));
+   //endfunction: report_phase
+endclass: jtag_simple_test
+
+//---------------------------------------------------------------------------
 // Class: jtag_1149_1_test
 //---------------------------------------------------------------------------
 
@@ -91,7 +158,7 @@ class jtag_1149_1_test extends jtag_base_test;
       TCK_clk_cfg.half_period = `TCK_HALF_PERIOD;
       TCK_clk_cfg.free_running = 0;
       
-      SYSCLK_clk_cfg.gen_stil_file = `ON;
+      SYSCLK_clk_cfg.gen_stil_file = `OFF;
       SYSCLK_clk_cfg.half_period = `SYSCLK_HALF_PERIOD;
       SYSCLK_clk_cfg.free_running = 1;
       

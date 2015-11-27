@@ -11,10 +11,34 @@ class one_operation_jtag_sequence extends uvm_sequence#( jtag_transaction);
    endfunction: new
 
    task body();
-      jtag_transaction jtag_tx;
+      jtag_transaction                 jtag_tx;
+      bit [`IEEE_1149_IR_WIDTH-1:0]    ir;
+      bit [`IDCODE_LENGTH-1:0]         dr;
+
       jtag_tx = jtag_transaction::type_id::create( .name( "jtag_tx" ) );
       start_item( jtag_tx );
-      assert( jtag_tx.randomize() );
+
+      jtag_tx.o_ir = new[`IEEE_1149_IR_WIDTH];
+      jtag_tx.o_ir_length = `IEEE_1149_IR_WIDTH;
+      ir = `IEEE_1149_IR_WIDTH'hfc;
+      foreach(ir[i]) jtag_tx.o_ir[i] = ir[i];
+
+      jtag_tx.o_dr = new[`IDCODE_LENGTH];
+      jtag_tx.o_dr_length = `IDCODE_LENGTH;
+      dr = `IDCODE_LENGTH'h3F;
+      foreach(dr[i]) jtag_tx.o_dr[i] = dr[i];
+      
+      jtag_tx.chk_ir_tdo = 1;
+      ir = {`IEEE_1149_IR_WIDTH{1'b1}};
+      foreach(ir[i]) jtag_tx.exp_tdo_ir_queue.push_front(ir[i]);
+      
+      
+      jtag_tx.chk_dr_tdo = 1;
+      dr = `IDCODE_RST_VALUE;
+      foreach(dr[i]) jtag_tx.exp_tdo_dr_queue.push_front(dr[i]);
+
+
+      //assert( jtag_tx.randomize() );
       finish_item( jtag_tx );
       `uvm_info( "jtag_tx", { "\n",jtag_tx.convert2string() }, UVM_LOW );
    endtask: body

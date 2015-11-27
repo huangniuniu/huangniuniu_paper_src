@@ -11,12 +11,12 @@ interface jtag_if( input bit tck, input bit trst);
     clocking negedge_cb @ ( negedge tck);
         default output #3ns;
        output tdi;
+       output tms;
        output read_not_write;
     endclocking: negedge_cb 
 
     clocking posedge_cb @ ( posedge tck);
        input  tdo;
-       output tms;
     endclocking: posedge_cb 
 
     clocking monitor_cb @ ( posedge tck );
