@@ -78,6 +78,7 @@ module top ( TDI, TMS, TRST,RESET_L,TCK,SYSCLK,TDO);
       else c_state <= n_state;
    end
 
+`ifdef UVM_TB
    always@(*) begin
       case (c_state)
          `TEST_LOGIC_RESET : n_state[3:0] = jtag_if.tms ? `TEST_LOGIC_RESET : `RUN_TEST_IDLE;
@@ -98,6 +99,28 @@ module top ( TDI, TMS, TRST,RESET_L,TCK,SYSCLK,TDO);
          `UPDATE_IR        : n_state[3:0] = jtag_if.tms ? `SELECT_DR_SCAN   : `RUN_TEST_IDLE;
       endcase
    end
+`else
+   always@(*) begin
+      case (c_state)
+         `TEST_LOGIC_RESET : n_state[3:0] = TMS ? `TEST_LOGIC_RESET : `RUN_TEST_IDLE;
+         `RUN_TEST_IDLE    : n_state[3:0] = TMS ? `SELECT_DR_SCAN   : `RUN_TEST_IDLE;
+         `SELECT_DR_SCAN   : n_state[3:0] = TMS ? `SELECT_IR_SCAN   : `CAPTURE_DR;
+         `CAPTURE_DR       : n_state[3:0] = TMS ? `EXIT1_DR         : `SHIFT_DR;
+         `SHIFT_DR         : n_state[3:0] = TMS ? `EXIT1_DR         : `SHIFT_DR;
+         `EXIT1_DR         : n_state[3:0] = TMS ? `UPDATE_DR        : `PAUSE_DR;
+         `PAUSE_DR         : n_state[3:0] = TMS ? `EXIT2_DR         : `PAUSE_DR;
+         `EXIT2_DR         : n_state[3:0] = TMS ? `UPDATE_DR        : `SHIFT_DR;
+         `UPDATE_DR        : n_state[3:0] = TMS ? `SELECT_DR_SCAN   : `RUN_TEST_IDLE;
+         `SELECT_IR_SCAN   : n_state[3:0] = TMS ? `TEST_LOGIC_RESET : `CAPTURE_IR;
+         `CAPTURE_IR       : n_state[3:0] = TMS ? `EXIT1_IR         : `SHIFT_IR;
+         `SHIFT_IR         : n_state[3:0] = TMS ? `EXIT1_IR         : `SHIFT_IR;
+         `EXIT1_IR         : n_state[3:0] = TMS ? `UPDATE_IR        : `PAUSE_IR;
+         `PAUSE_IR         : n_state[3:0] = TMS ? `EXIT2_IR         : `PAUSE_IR;
+         `EXIT2_IR         : n_state[3:0] = TMS ? `UPDATE_IR        : `SHIFT_IR;
+         `UPDATE_IR        : n_state[3:0] = TMS ? `SELECT_DR_SCAN   : `RUN_TEST_IDLE;
+      endcase
+   end
+`endif
 
    assign shift_ir =    (c_state == `SHIFT_IR);
    assign shift_dr =    (c_state == `SHIFT_DR);
