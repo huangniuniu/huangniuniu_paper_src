@@ -14,7 +14,7 @@ module top;
   clk_if         SYSCLK_clk_if(); 
   reset_if       reset_if(TCK_clk_if.clk);
   pad_if         pad_if(TCK_clk_if.clk);
-  system_shell   dut( jtag_if, TCK_clk_if.dut_mp,SYSCLK_clk_if.dut_mp, reset_if, pad_if.dut_mp);
+  system_shell   dut( jtag_if, TCK_clk_if.dut_mp,SYSCLK_clk_if.dut_mp, reset_if, pad_if);
   
    //initial begin
    //   tck = 0;

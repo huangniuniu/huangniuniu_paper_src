@@ -112,12 +112,14 @@ class jtag_simple_test extends jtag_base_test;
 
    task main_phase( uvm_phase phase);
       one_operation_jtag_sequence         jtag_reg_seq;
-      
+      pad_sequence                        pad_seq; 
       phase.raise_objection( .obj( this ), .description( "start of test" ));
 
       jtag_reg_seq = one_operation_jtag_sequence::type_id::create( "jtag_reg_seq" );
       jtag_reg_seq.start( env.agent.sqr);
       
+      pad_seq = pad_sequence::type_id::create( "pad_seq" );
+      pad_seq.start( env.pad_agnt.pad_sqr);
       phase.drop_objection( .obj( this ), .description( "end of test" ));
    endtask: main_phase
 

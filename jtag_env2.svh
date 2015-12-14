@@ -980,27 +980,25 @@ class pad_driver extends uvm_driver#( pad_rw_transaction);
 
    task run_phase( uvm_phase phase );
       pad_rw_transaction      pad_tx;
-      //pad_vi.driver_mp.pad_grp0_in[0] <= 1'b1;
       forever begin
          seq_item_port.get_next_item( pad_tx );
          @(posedge pad_vi.clk);
          if(pad_tx.grp_num == 0)begin
-            foreach(pad_tx.in_data_queue[i]) pad_vi.driver_mp.pad_grp0_in[i] <= pad_tx.in_data_queue[$-i];
+            foreach(pad_tx.in_data_queue[i]) pad_vi.pad_grp0_in[i] = pad_tx.in_data_queue.pop_back;
             
             foreach(pad_tx.exp_out_data_queue[i])begin
-               if(pad_tx.exp_out_data_queue[$-i] !== 1'bx) pad_tx.out_data_queue.push_front(pad_vi.driver_mp.pad_grp0_out[i]);
-               else pad_tx.out_data_queue.push_front(1'bx);
+               if(pad_tx.exp_out_data_queue[i] !== 1'bx) pad_tx.out_data_queue.push_back(pad_vi.pad_grp0_out[i]);
+               else pad_tx.out_data_queue.push_back(1'bx);
             end
             
             foreach(pad_tx.inout_data_queue[i])begin
                //in dir mode. need drive
-               if(pad_tx.inout_data_queue[$-i] !== 1'bx) pad_vi.driver_mp.pad_grp0_inout[i] <= pad_tx.inout_data_queue[$-i];
+               if(pad_tx.inout_data_queue[i] !== 1'bx) pad_vi.pad_grp0_inout[i] = pad_tx.inout_data_queue.pop_back;
             end
             
             foreach(pad_tx.exp_inout_data_queue[i])begin
-               pad_tx.inout_data_queue.delete();
-               if(pad_tx.exp_inout_data_queue[$-i] !== 1'bx) pad_tx.inout_data_queue.push_front(pad_vi.driver_mp.pad_grp0_inout[i]);
-               else pad_tx.inout_data_queue.push_front(1'bx);
+               if(pad_tx.exp_inout_data_queue[i] !== 1'bx) pad_tx.out_data_queue.push_back(pad_vi.pad_grp0_inout[i]);
+               else pad_tx.out_data_queue.push_back(1'bx);
             end
             
          end// if(pad_tx.grp_num == 0)begin

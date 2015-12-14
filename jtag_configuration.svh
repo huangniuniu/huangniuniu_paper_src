@@ -148,14 +148,23 @@ endclass: reset_configuration
 
 class pad_configuration extends uvm_object;
    `uvm_object_utils( pad_configuration )
+   
+   virtual pad_if           pad_vi;
+   bit                      gen_stil_file;
+   string                   grp0_in_name[`PAD_GRP0_IN_NUM];
+   string                   grp0_out_name[`PAD_GRP0_OUT_NUM];
+   string                   grp0_inout_name[`PAD_GRP0_INOUT_NUM];
 
+   string                   grp1_in_name[`PAD_GRP1_IN_NUM];
+   string                   grp1_out_name[`PAD_GRP1_OUT_NUM];
+   string                   grp1_inout_name[`PAD_GRP1_INOUT_NUM];
+   
    function new( string name = "" );
       super.new( name );
    endfunction: new
 
-   virtual pad_if          pad_vi;
-
-   bit                       gen_stil_file;
+   function void pad_info_init();
+   endfunction: pad_info_init 
 endclass: pad_configuration
 
 

@@ -1,4 +1,3 @@
-
 //---------------------------------------------------------------------------
 // Class: one_operation_jtag_sequence
 //---------------------------------------------------------------------------
@@ -12,6 +11,7 @@ class one_operation_jtag_sequence extends uvm_sequence#( jtag_transaction);
 
    task body();
       jtag_transaction                 jtag_tx;
+
       bit [`IEEE_1149_IR_WIDTH-1:0]    ir;
       bit [`IDCODE_LENGTH-1:0]         dr;
 
@@ -41,8 +41,36 @@ class one_operation_jtag_sequence extends uvm_sequence#( jtag_transaction);
       //assert( jtag_tx.randomize() );
       finish_item( jtag_tx );
       `uvm_info( "jtag_tx", { "\n",jtag_tx.convert2string() }, UVM_LOW );
+
    endtask: body
 endclass: one_operation_jtag_sequence
+
+
+//---------------------------------------------------------------------------
+// Class: pad_sequence
+//---------------------------------------------------------------------------
+   
+class pad_sequence extends uvm_sequence#( pad_rw_transaction);
+   `uvm_object_utils( pad_sequence )
+
+   function new( string name = "" );
+      super.new( name );
+   endfunction: new
+
+   task body();
+      pad_rw_transaction               pad_tx;
+      pad_tx = pad_rw_transaction::type_id::create( .name( "pad_tx" ) );
+      start_item( pad_tx );
+      pad_tx.grp_num = 0;
+      pad_tx.in_data_queue = {1,0};
+      pad_tx.exp_out_data_queue = {1'bx,1'bz};
+      pad_tx.inout_data_queue = {1'bx,1'b0};
+      pad_tx.exp_inout_data_queue = {1'b0,1'bx};
+      `uvm_info( "pad_tx", { "\n",pad_tx.convert2string() }, UVM_NONE);
+      finish_item( pad_tx );
+      `uvm_info( "pad_tx", { "\n",pad_tx.convert2string() }, UVM_NONE);
+   endtask: body
+endclass: pad_sequence
 
 
 //---------------------------------------------------------------------------

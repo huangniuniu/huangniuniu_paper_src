@@ -8,7 +8,7 @@
 //------------------------------------------------------------------------------
 
 `ifdef UVM_TB
-module system_shell( jtag_if.slave_mp jtag_if, clk_if.dut_mp tck_clk_if, clk_if.dut_mp sysclk_clk_if,reset_if.dut_mp reset_if, pad_if.dut_mp pad_if);
+module system_shell( jtag_if.slave_mp jtag_if, clk_if.dut_mp tck_clk_if, clk_if.dut_mp sysclk_clk_if,reset_if.dut_mp reset_if, pad_if pad_if);
    import jtag_pkg::*; 
 
    assign pad_if.pad_grp0_out[0] = 1'b1;

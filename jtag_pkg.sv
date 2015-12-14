@@ -40,7 +40,18 @@ typedef enum bit[3:0] { TEST_LOGIC_RESET, RUN_TEST_IDLE, SELECT_DR_SCAN, CAPTURE
 `define   PAUSE_IR            4'hd
 `define   EXIT2_IR            4'he
 `define   UPDATE_IR           4'hf                 
-//`
+//GRP0
+`define   PAD_GRP0_IN_NUM    2 
+`define   PAD_GRP0_OUT_NUM   2 
+`define   PAD_GRP0_INOUT_NUM 2 
+`define   PAD_GRP0_IN_TOTAL_NUM       `PAD_GRP0_IN_NUM + `PAD_GRP0_INOUT_NUM 
+`define   PAD_GRP0_OUT_TOTAL_NUM      `PAD_GRP0_OUT_NUM + `PAD_GRP0_INOUT_NUM 
+//GRP1
+`define   PAD_GRP1_IN_NUM    2 
+`define   PAD_GRP1_OUT_NUM   2 
+`define   PAD_GRP1_INOUT_NUM 2 
+`define   PAD_GRP1_IN_TOTAL_NUM       `PAD_GRP1_IN_NUM + `PAD_GRP1_INOUT_NUM 
+`define   PAD_GRP1_OUT_TOTAL_NUM      `PAD_GRP1_OUT_NUM + `PAD_GRP1_INOUT_NUM 
 `include "ral.svh"
 `include "jtag_configuration.svh"
 //`include "jtag_transaction.svh"

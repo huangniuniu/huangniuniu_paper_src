@@ -1,4 +1,20 @@
 //------------------------------------------------------------------------------
+// Interface: pad_if 
+//------------------------------------------------------------------------------
+
+interface pad_if( input bit clk);
+    logic [`PAD_GRP0_IN_NUM-1:0]      pad_grp0_in;
+    logic [`PAD_GRP0_OUT_NUM-1:0]     pad_grp0_out;
+    logic [`PAD_GRP0_INOUT_NUM-1:0]   pad_grp0_inout;
+    
+    logic [`PAD_GRP1_IN_NUM-1:0]      pad_grp1_in;
+    logic [`PAD_GRP1_OUT_NUM-1:0]     pad_grp1_out;
+    logic [`PAD_GRP1_INOUT_NUM-1:0]   pad_grp1_inout;
+    modport driver_mp(input pad_grp0_out, output  pad_grp0_in, inout  pad_grp0_inout,input  pad_grp1_out, output  pad_grp1_in, inout  pad_grp1_inout);    
+    modport dut_mp(output pad_grp0_out, input  pad_grp0_in, inout  pad_grp0_inout,output pad_grp1_out, input  pad_grp1_in, inout  pad_grp1_inout);    
+ endinterface: pad_if
+
+//------------------------------------------------------------------------------
 // Interface: jtag_if 
 //------------------------------------------------------------------------------
 
@@ -57,23 +73,5 @@ interface reset_if( input bit tck);
     modport dut_mp(input trst, RESET_L);
     modport driver_mp(clocking posedge_cb);
 endinterface: reset_if
-
-//------------------------------------------------------------------------------
-// Interface: pad_if 
-//------------------------------------------------------------------------------
-
-interface pad_if( input bit tck );
-   logic VDD;
-   logic VSS;
-   logic POWER_OK;
-   
-    clocking posedge_cb @ ( posedge tck);
-       output VDD;
-       output VSS;
-       output POWER_OK;
-    endclocking: posedge_cb 
-    modport dut_mp(input VDD, VSS, POWER_OK);
-    modport driver_mp(clocking posedge_cb);
-endinterface: pad_if
 
 
