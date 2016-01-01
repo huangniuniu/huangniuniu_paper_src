@@ -40,6 +40,7 @@ typedef enum bit[3:0] { TEST_LOGIC_RESET, RUN_TEST_IDLE, SELECT_DR_SCAN, CAPTURE
 `define   PAUSE_IR            4'hd
 `define   EXIT2_IR            4'he
 `define   UPDATE_IR           4'hf                 
+`define   SCAN_GRP_NUM_WIDTH  20
 //GRP0
 `define   PAD_GRP0_IN_NUM    2 
 `define   PAD_GRP0_OUT_NUM   2 

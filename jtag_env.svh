@@ -131,6 +131,18 @@ class clk_wave_description extends uvm_object;
    endfunction: convert2string
 endclass : clk_wave_description
 
+//------------------------------------------------------------------------------
+// class: scan_transaction
+//------------------------------------------------------------------------------
+class scan_transaction extends uvm_sequence_item;
+    bit[1:0]                          scan_mode;
+    bit[`SCAN_GRP_NUM_WIDTH-1:0]      scan_grp_num;
+    int unsigned                      shift_cycle;
+    `uvm_object_utils( scan_transaction )
+    function new(string name = "scan_transaction");
+        super.new(name);
+    endfunction
+endclass: scan_transaction 
 
 //------------------------------------------------------------------------------
 // class: jtag_transaction
@@ -1685,6 +1697,11 @@ typedef uvm_sequencer #(jtag_transaction) jtag_sequencer;
 // Class: dft_register_sequencer
 //---------------------------------------------------------------------------
 typedef uvm_sequencer #(dft_register_transaction) dft_register_sequencer;
+
+//---------------------------------------------------------------------------
+// Class: scan_sequencer 
+//---------------------------------------------------------------------------
+typedef uvm_sequencer #(scan_transaction) scan_sequencer;
 
 //------------------------------------------------------------------------------
 // Class: dft_register_adapter
